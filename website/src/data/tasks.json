@@ -25,7 +25,7 @@
       "taskType": "Tile prediction",
       "taskCount": 10,
       "dataAccess": "Public (CAMELYON16)",
-      "blurb": "Inspect a gigapixel pathology slide and predict the set of tumor tiles on a fixed analysis grid. Success criteria: 0.9 tile F1."
+      "blurb": "Inspect a gigapixel pathology slide and predict the set of tumor tiles on a fixed analysis grid. Success criteria: ≥ 0.9 tile F1."
     },
     {
       "slug": "ct_abnormality",
