@@ -101,6 +101,7 @@ function rFor(t) {
   const clamped = Math.max(WALL_FLOOR, Math.min(WALL_CEIL, t || WALL_FLOOR));
   return 4 + 16 * ((Math.sqrt(clamped) - Math.sqrt(WALL_FLOOR)) / (Math.sqrt(WALL_CEIL) - Math.sqrt(WALL_FLOOR)));
 }
+const fmtPercent = (value) => `${Math.round(value * 100)}%`;
 const tierFor = (c) => (c < 1 ? '$' : c < 2 ? '$$' : c < 3 ? '$$$' : '$$$$');
 
 // --- cells ---
@@ -211,7 +212,7 @@ const VB_MINX = -56; // left gutter so the rotated "Agent" title clears the row 
     <text x={legendX} y={MT + 4} fill={LABEL} font-size="12" font-weight="600">Task success rate</text>
     <rect x={legendX} y={MT + 14} width="130" height="14" fill="url(#ylgnbu)" rx="2" />
     {[0, 0.5, 1].map((t, i) => (
-      <text x={legendX + i * 65} y={MT + 44} text-anchor="middle" fill={MUTED} font-size="10">{t.toFixed(2)}</text>
+      <text x={legendX + i * 65} y={MT + 44} text-anchor="middle" fill={MUTED} font-size="10">{fmtPercent(t)}</text>
     ))}
     <text x={legendX} y={MT + 62} fill={MUTED} font-size="10">higher is better</text>
 
@@ -255,7 +256,7 @@ const VB_MINX = -56; // left gutter so the rotated "Agent" title clears the row 
         data-agent={c.agent}
         data-task={c.task}
         data-noscore={c.noScore ? '1' : ''}
-        data-score={c.noScore ? '' : c.score.toFixed(2)}
+        data-score={c.noScore ? '' : fmtPercent(c.score)}
         data-time={c.noScore ? '' : (c.wallTimeS / 60).toFixed(1)}
         data-turns={c.noScore ? '' : Math.round(c.turns)}
         data-cost={c.noScore ? '' : c.cost.toFixed(2)}

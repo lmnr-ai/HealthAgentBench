@@ -5,6 +5,7 @@ import results from '../data/results.json';
 const best = results.bestByTask;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 const withBase = (path) => `${basePath}${path}`;
+const fmtPercent = (value) => `${Math.round(value * 100)}%`;
 ---
 
 <div class="grid">
@@ -26,7 +27,7 @@ const withBase = (path) => `${basePath}${path}`;
             {score === null || score === undefined ? (
               <small>n/a</small>
             ) : (
-              <>{score.toFixed(2)} <small>best success rate</small></>
+              <>{fmtPercent(score)} <small>best success rate</small></>
             )}
           </span>
         </div>

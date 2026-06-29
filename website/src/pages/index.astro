@@ -11,7 +11,8 @@ const nAgents = results.agents.length;
 const nCategories = tasks.families.length;
 const totalTasks = results.totalTaskCount;
 const leader = results.agents[0];
-const leaderScore = leader.pooled.toFixed(2);
+const fmtPercent = (value) => `${Math.round(value * 100)}%`;
+const leaderScore = fmtPercent(leader.pooled);
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 const withBase = (path) => `${basePath}${path}`;
 const citationEntry = String.raw`@misc{liu2026healthagentbench,

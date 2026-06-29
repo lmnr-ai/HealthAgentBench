@@ -12,7 +12,7 @@ const orderedTasks = [
   ...results.tasks.filter((key) => !(key in metaByTask)),
 ];
 const { agents, scoreMetric, totalTaskCount } = results;
-const fmt = (v) => (v === undefined || v === null ? '—' : v.toFixed(2));
+const fmtPercent = (v) => (v === undefined || v === null ? '—' : `${Math.round(v * 100)}%`);
 const weightedMean = (agent, key) => {
   let weightedTotal = 0;
   let totalTrials = 0;
@@ -85,7 +85,7 @@ const fmtMinutes = (seconds) => (seconds === undefined || seconds === null ? '�
                       : undefined
                   }
                 >
-                  <span class="score">{fmt(a.perTask[t]?.score)}</span>
+                  <span class="score">{fmtPercent(a.perTask[t]?.score)}</span>
                 </td>
               ))}
             <td class="cost-col" data-key="cost" data-val={a.costPerTaskUsd ?? a.totalCostUsd}>

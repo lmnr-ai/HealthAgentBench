@@ -24,7 +24,7 @@
       "modality": "Pathology WSI",
       "taskType": "Tile prediction",
       "taskCount": 10,
-      "dataAccess": "Public (TCGA, CAMELYON16)",
+      "dataAccess": "Public (CAMELYON16)",
       "blurb": "Inspect a gigapixel pathology slide and predict the set of tumor tiles on a fixed analysis grid. Success criteria: 0.9 tile F1."
     },
     {
