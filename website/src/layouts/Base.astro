@@ -1,6 +1,7 @@
 ---
 import '../styles/global.css';
 const paperTitle = 'HealthAgentBench: A Unified Benchmark Suite of Realistic Agentic Healthcare Environments for Challenging Frontier AI Agents';
+const paperUrl = 'https://arxiv.org/pdf/2606.31179';
 const { title = paperTitle, description = paperTitle } = Astro.props;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 const withBase = (path) => `${basePath}${path}`;
@@ -36,7 +37,7 @@ const withBase = (path) => `${basePath}${path}`;
             GitHub
             <span class="external-icon" aria-hidden="true">↗</span>
           </a>
-          <a class="external-link" href="https://arxiv.org" target="_blank" rel="noreferrer">
+          <a class="external-link" href={paperUrl} target="_blank" rel="noreferrer">
             Paper
             <span class="external-icon" aria-hidden="true">↗</span>
           </a>
