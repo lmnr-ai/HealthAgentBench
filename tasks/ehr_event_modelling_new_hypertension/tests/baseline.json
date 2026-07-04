@@ -1,0 +1,12 @@
+{
+  "task_id": "new_hypertension",
+  "kind": "binary",
+  "test_subset": "first",
+  "n_test": 755,
+  "baseline_model": "count + LightGBM",
+  "baseline_auroc": 0.6724690040233188,
+  "baseline_source": "assets/ehr_event_modelling/assets/baselines.csv :: auroc_first (count+gbm refit on EHRSHOT train+val, scored on first-row-per-patient test subset)",
+  "clmbr_baseline_model": "clmbr + lr_lbfgs",
+  "clmbr_baseline_auroc": 0.7083504392807292,
+  "clmbr_baseline_source": "assets/ehr_event_modelling/assets/baselines_clmbr.csv :: auroc_first (clmbr+lr_lbfgs refit on EHRSHOT train+val, scored on first subset)"
+}
