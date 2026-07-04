@@ -1,0 +1,48 @@
+services:
+  main:
+    build:
+      context: ..
+      dockerfile: environment/Dockerfile
+    image: ${COMPOSE_PROJECT_NAME}-img
+    # /data/_cache is intentionally NOT mounted into main. /tests/ is not
+    # mounted into main during agent runtime either (Harbor's convention --
+    # the agent has no path to read test_labels.csv mid-run). Harbor
+    # auto-mounts /tests/ when invoking the verifier (test.sh).
+    volumes:
+      - workspace-data:/workspace/data:rw
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  bootstrap:
+    image: ${COMPOSE_PROJECT_NAME}-img
+    # All host paths are relative to this compose file's location
+    # (tasks/ehr_event_modelling/<task>/environment/) so the repo is portable across
+    # users / machines. The Redivis API token is read from the repo-root .env
+    # via env_file (mirrors the ct_abnormality / HF_TOKEN pattern).
+    env_file:
+      # REDIVIS_API_TOKEN (EHRSHOT is Redivis-gated) lives here, needed only if
+      # the cache is empty (downloads ~4 GB from Redivis on first run). Other
+      # vars in .env load harmlessly. Only the bootstrap service reads .env, so
+      # the token never reaches the agent's main container.
+      - ../../../.env
+    volumes:
+      # Shared EHRSHOT bundle cache (RW so bootstrap can populate on cache
+      # miss). Repo-relative: assets/ehr_event_modelling/assets/.
+      - ../../../assets/ehr_event_modelling/assets:/data/_cache:rw
+      - workspace-data:/workspace/data:rw
+      # Bootstrap writes test_labels.csv into tasks/<task>/tests/ at run
+      # time. The file is gitignored so it never enters version control.
+      # Harbor's verifier reads it from there when invoking test.sh.
+      - ../tests:/tests:rw
+      # bootstrap.sh (per-task entrypoint) and stage_data.py (the slicer) are
+      # mounted into the bootstrap service ONLY -- never baked into the shared
+      # image -- so the agent's main container cannot read them.
+      - ./bootstrap.sh:/bootstrap.sh:ro
+      - ./stage_data.py:/opt/ehr_event_modelling/stage_data.py:ro
+    command: ["/bin/bash", "/bootstrap.sh"]
+
+volumes:
+  workspace-data:
