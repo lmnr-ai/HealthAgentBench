@@ -149,7 +149,7 @@ uv run harbor run \
   --agent-kwarg reasoning_effort=xhigh \
   --agent-kwarg disallowed_tools="WebSearch WebFetch" \
   --n-attempts 1 --n-concurrent 5 \
-  --job-dir <the output directory>  \
+  --jobs-dir <the output directory>  \
 ```
 
 Harbor will print out a `mean` column that records the success rate and all the tasks' rewards (1 or 0) across the runs. You will find full results in the output directory. We also record additional metrics in addition to binary pass in `verifier/metrics.json` in each task subdirectory in output directory. 
