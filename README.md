@@ -124,9 +124,9 @@ instructions below and fill in the credentials in `.env` (there is a file
 
 ### Setting up other secrets
 
-X-ray Report Correction is scored by an LLM-based judge based on [CheXprompt](https://github.com/microsoft/chexprompt) verifier. We use openai's GPT-5.4 as the default judge. **Configure one of two paths in `.env`** (the
-verifier auto-detects which is present): **(a) vanilla OpenAI** set `OPENAI_API_KEY`, `OPENAI_BASE_URL`, or **(b) Azure OpenAI** —
-set `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, We use GPT-5.4 as the default LLM judge. If you want to change, you can set `CHEXPROMPT_DEPLOYMENT` to a different model deployment.
+X-ray Report Correction is scored by an LLM-based judge based on the [CheXprompt](https://github.com/microsoft/chexprompt) verifier. We use GPT-5.4 as the default judge. **Configure one of two paths in `.env`** (the
+verifier auto-detects which is present): **(a) vanilla OpenAI** — set `CHEXPROMPT_OPENAI_API_KEY` and optionally `CHEXPROMPT_OPENAI_BASE_URL`; or **(b) Azure OpenAI** —
+set `CHEXPROMPT_AZURE_OPENAI_API_KEY`, `CHEXPROMPT_AZURE_OPENAI_ENDPOINT`, and `CHEXPROMPT_AZURE_OPENAI_API_VERSION`. To change the default judge, set `CHEXPROMPT_DEPLOYMENT` to a different model or deployment name.
 
 ### Exporting environment variables from .env
 Make sure you have `.env` at this repo directory so that the containers can read the environment variables. 

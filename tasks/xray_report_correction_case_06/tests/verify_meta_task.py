@@ -25,8 +25,11 @@ synthetic-zero for trials with no verifier output).
 
 Required runtime env (verifier process only — agent never sees them):
 
-  * ``OPENAI_API_KEY`` and either ``OPENAI_BASE_URL`` (vanilla OpenAI)
-    or ``OPENAI_API_BASE`` + ``OPENAI_API_VERSION`` (Azure).
+  * ``CHEXPROMPT_OPENAI_API_KEY`` and optional
+    ``CHEXPROMPT_OPENAI_BASE_URL`` (vanilla OpenAI), or
+    ``CHEXPROMPT_AZURE_OPENAI_API_KEY``,
+    ``CHEXPROMPT_AZURE_OPENAI_ENDPOINT``, and
+    ``CHEXPROMPT_AZURE_OPENAI_API_VERSION`` (Azure).
   * ``CHEXPROMPT_DEPLOYMENT``  — model / deployment name
     (e.g. ``gpt-4-1106-preview``).
 """
