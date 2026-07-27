@@ -109,7 +109,6 @@ function describe(harness, model) {
     'gpt-5-4-mini': 'GPT 5.4 Mini',
     'gpt-5-3-codex': 'GPT 5.3',
     'claude-opus-5': 'Opus 5',
-    'claude-fable-5': 'Fable 5',
     'claude-opus-4-8': 'Opus 4.8',
     'claude-opus-4-7': 'Opus 4.7',
     'claude-opus-4-6': 'Opus 4.6',

@@ -238,78 +238,6 @@
       "rank": 3
     },
     {
-      "modelLabel": "Fable 5",
-      "agentLabel": "Claude Code (Fable 5)",
-      "company": "Anthropic",
-      "harnessLabel": "Claude Code",
-      "harnessId": "claude-code",
-      "model": "claude-fable-5",
-      "pooled": 0.3950617283950617,
-      "nTaskCategories": 7,
-      "nTasks": 54,
-      "totalCostUsd": 37.04221570162037,
-      "costPerTaskUsd": 5.842817189814815,
-      "perTask": {
-        "clinical_trial_matching": {
-          "score": 0.5925925925925926,
-          "successes": 16,
-          "totalTrials": 27,
-          "costUsd": 15.85501412037037,
-          "avgTurns": null,
-          "wallTimeS": 829.5122742652893
-        },
-        "ct_abnormality": {
-          "score": 0.16666666666666666,
-          "successes": 5,
-          "totalTrials": 30,
-          "costUsd": 5.255150491666667,
-          "avgTurns": null,
-          "wallTimeS": 1481.4069158554078
-        },
-        "ehr_data_quality": {
-          "score": 0.375,
-          "successes": 9,
-          "totalTrials": 24,
-          "costUsd": 4.283452322916667,
-          "avgTurns": null,
-          "wallTimeS": 980.7515296836694
-        },
-        "ehr_event_modelling": {
-          "score": 0.6111111111111112,
-          "successes": 11,
-          "totalTrials": 18,
-          "costUsd": 2.2379155,
-          "avgTurns": null,
-          "wallTimeS": 1508.5830799341202
-        },
-        "ehr_to_meds_etl": {
-          "score": 1,
-          "successes": 3,
-          "totalTrials": 3,
-          "costUsd": 2.392938666666667,
-          "avgTurns": null,
-          "wallTimeS": 324.96672201156616
-        },
-        "tumor_area_selection_pathology": {
-          "score": 0.23333333333333334,
-          "successes": 7,
-          "totalTrials": 30,
-          "costUsd": 4.616295666666668,
-          "avgTurns": null,
-          "wallTimeS": 1083.9675057252248
-        },
-        "xray_report_correction": {
-          "score": 0.43333333333333335,
-          "successes": 13,
-          "totalTrials": 30,
-          "costUsd": 2.4014489333333335,
-          "avgTurns": null,
-          "wallTimeS": 309.22366155783334
-        }
-      },
-      "rank": 4
-    },
-    {
       "modelLabel": "Opus 4.8",
       "agentLabel": "Copilot (Opus 4.8)",
       "company": "Anthropic",
@@ -379,7 +307,7 @@
           "wallTimeS": 1548.04
         }
       },
-      "rank": 5
+      "rank": 4
     },
     {
       "modelLabel": "GPT 5.5",
@@ -451,7 +379,7 @@
           "wallTimeS": 2889.49
         }
       },
-      "rank": 6
+      "rank": 5
     },
     {
       "modelLabel": "Opus 4.8",
@@ -523,7 +451,7 @@
           "wallTimeS": 1357.15
         }
       },
-      "rank": 7
+      "rank": 6
     },
     {
       "modelLabel": "GPT 5.4",
@@ -595,7 +523,7 @@
           "wallTimeS": 1370.63
         }
       },
-      "rank": 8
+      "rank": 7
     },
     {
       "modelLabel": "Opus 4.7",
@@ -667,7 +595,7 @@
           "wallTimeS": 2142.03
         }
       },
-      "rank": 9
+      "rank": 8
     },
     {
       "modelLabel": "GPT 5.3",
@@ -739,7 +667,7 @@
           "wallTimeS": 1495.78
         }
       },
-      "rank": 10
+      "rank": 9
     },
     {
       "modelLabel": "Opus 4.6",
@@ -811,7 +739,7 @@
           "wallTimeS": 3645.31
         }
       },
-      "rank": 11
+      "rank": 10
     },
     {
       "modelLabel": "Sonnet 4.6",
@@ -883,7 +811,7 @@
           "wallTimeS": 3659
         }
       },
-      "rank": 12
+      "rank": 11
     },
     {
       "modelLabel": "GPT 5.4 Mini",
@@ -955,7 +883,7 @@
           "wallTimeS": 1868.63
         }
       },
-      "rank": 13
+      "rank": 12
     }
   ],
   "partial": [],
