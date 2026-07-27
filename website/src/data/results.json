@@ -1,5 +1,5 @@
 {
-  "generatedFrom": "paper/baselines.md",
+  "generatedFrom": "medcli-paper-latex/figures/baseline_metrics.json",
   "scoreMetric": "mean reward",
   "tasks": [
     "xray_report_correction",
@@ -21,6 +21,150 @@
   },
   "totalTaskCount": 54,
   "agents": [
+    {
+      "modelLabel": "Opus 5",
+      "agentLabel": "Claude Code (Opus 5)",
+      "company": "Anthropic",
+      "harnessLabel": "Claude Code",
+      "harnessId": "claude-code",
+      "model": "claude-opus-5",
+      "pooled": 0.5493827160493827,
+      "nTaskCategories": 7,
+      "nTasks": 54,
+      "totalCostUsd": 21.04490403888889,
+      "costPerTaskUsd": 3.29700124691358,
+      "perTask": {
+        "clinical_trial_matching": {
+          "score": 0.7777777777777778,
+          "successes": 21,
+          "totalTrials": 27,
+          "costUsd": 2.749797555555556,
+          "avgTurns": null,
+          "wallTimeS": 371.5526898172167
+        },
+        "ct_abnormality": {
+          "score": 0.26666666666666666,
+          "successes": 8,
+          "totalTrials": 30,
+          "costUsd": 4.7599264833333335,
+          "avgTurns": null,
+          "wallTimeS": 1125.2139514128366
+        },
+        "ehr_data_quality": {
+          "score": 0.7083333333333334,
+          "successes": 17,
+          "totalTrials": 24,
+          "costUsd": 3.794832916666667,
+          "avgTurns": null,
+          "wallTimeS": 735.2215040624142
+        },
+        "ehr_event_modelling": {
+          "score": 0.7222222222222222,
+          "successes": 13,
+          "totalTrials": 18,
+          "costUsd": 1.3887531666666666,
+          "avgTurns": null,
+          "wallTimeS": 1832.56499379211
+        },
+        "ehr_to_meds_etl": {
+          "score": 1,
+          "successes": 3,
+          "totalTrials": 3,
+          "costUsd": 1.8351663333333335,
+          "avgTurns": null,
+          "wallTimeS": 298.10969432195026
+        },
+        "tumor_area_selection_pathology": {
+          "score": 0.5666666666666667,
+          "successes": 17,
+          "totalTrials": 30,
+          "costUsd": 5.181838549999999,
+          "avgTurns": null,
+          "wallTimeS": 1035.6072876850765
+        },
+        "xray_report_correction": {
+          "score": 0.3333333333333333,
+          "successes": 10,
+          "totalTrials": 30,
+          "costUsd": 1.3345890333333332,
+          "avgTurns": null,
+          "wallTimeS": 289.25358062585195
+        }
+      },
+      "rank": 1
+    },
+    {
+      "modelLabel": "GPT-5.6-sol",
+      "agentLabel": "Codex (GPT-5.6-sol)",
+      "company": "OpenAI",
+      "harnessLabel": "Codex",
+      "harnessId": "codex",
+      "model": "gpt-5.6-sol",
+      "pooled": 0.4506172839506173,
+      "nTaskCategories": 7,
+      "nTasks": 54,
+      "totalCostUsd": 31.821201546296294,
+      "costPerTaskUsd": 5.188571932098766,
+      "perTask": {
+        "clinical_trial_matching": {
+          "score": 0.5555555555555556,
+          "successes": 15,
+          "totalTrials": 27,
+          "costUsd": 2.341056185185185,
+          "avgTurns": null,
+          "wallTimeS": 565.669074314612
+        },
+        "ct_abnormality": {
+          "score": 0.2,
+          "successes": 6,
+          "totalTrials": 30,
+          "costUsd": 6.088857133333334,
+          "avgTurns": null,
+          "wallTimeS": 1009.01433151563
+        },
+        "ehr_data_quality": {
+          "score": 0.5416666666666666,
+          "successes": 13,
+          "totalTrials": 24,
+          "costUsd": 4.073387583333333,
+          "avgTurns": null,
+          "wallTimeS": 937.6655268371105
+        },
+        "ehr_event_modelling": {
+          "score": 0.8333333333333334,
+          "successes": 15,
+          "totalTrials": 18,
+          "costUsd": 4.457402444444444,
+          "avgTurns": null,
+          "wallTimeS": 1873.8214724328782
+        },
+        "ehr_to_meds_etl": {
+          "score": 0.6666666666666666,
+          "successes": 2,
+          "totalTrials": 3,
+          "costUsd": 1.0790766666666667,
+          "avgTurns": null,
+          "wallTimeS": 349.71092136700946
+        },
+        "tumor_area_selection_pathology": {
+          "score": 0.3,
+          "successes": 9,
+          "totalTrials": 30,
+          "costUsd": 13.008432866666668,
+          "avgTurns": null,
+          "wallTimeS": 1354.180679122607
+        },
+        "xray_report_correction": {
+          "score": 0.43333333333333335,
+          "successes": 13,
+          "totalTrials": 30,
+          "costUsd": 0.7729886666666667,
+          "avgTurns": null,
+          "wallTimeS": 180.01530883312225
+        }
+      },
+      "rank": 2
+    },
     {
       "modelLabel": "GPT 5.5",
       "agentLabel": "Codex (GPT 5.5)",
@@ -91,7 +235,79 @@
           "wallTimeS": 2194.54
         }
       },
-      "rank": 1
+      "rank": 3
+    },
+    {
+      "modelLabel": "Fable 5",
+      "agentLabel": "Claude Code (Fable 5)",
+      "company": "Anthropic",
+      "harnessLabel": "Claude Code",
+      "harnessId": "claude-code",
+      "model": "claude-fable-5",
+      "pooled": 0.3950617283950617,
+      "nTaskCategories": 7,
+      "nTasks": 54,
+      "totalCostUsd": 37.04221570162037,
+      "costPerTaskUsd": 5.842817189814815,
+      "perTask": {
+        "clinical_trial_matching": {
+          "score": 0.5925925925925926,
+          "successes": 16,
+          "totalTrials": 27,
+          "costUsd": 15.85501412037037,
+          "avgTurns": null,
+          "wallTimeS": 829.5122742652893
+        },
+        "ct_abnormality": {
+          "score": 0.16666666666666666,
+          "successes": 5,
+          "totalTrials": 30,
+          "costUsd": 5.255150491666667,
+          "avgTurns": null,
+          "wallTimeS": 1481.4069158554078
+        },
+        "ehr_data_quality": {
+          "score": 0.375,
+          "successes": 9,
+          "totalTrials": 24,
+          "costUsd": 4.283452322916667,
+          "avgTurns": null,
+          "wallTimeS": 980.7515296836694
+        },
+        "ehr_event_modelling": {
+          "score": 0.6111111111111112,
+          "successes": 11,
+          "totalTrials": 18,
+          "costUsd": 2.2379155,
+          "avgTurns": null,
+          "wallTimeS": 1508.5830799341202
+        },
+        "ehr_to_meds_etl": {
+          "score": 1,
+          "successes": 3,
+          "totalTrials": 3,
+          "costUsd": 2.392938666666667,
+          "avgTurns": null,
+          "wallTimeS": 324.96672201156616
+        },
+        "tumor_area_selection_pathology": {
+          "score": 0.23333333333333334,
+          "successes": 7,
+          "totalTrials": 30,
+          "costUsd": 4.616295666666668,
+          "avgTurns": null,
+          "wallTimeS": 1083.9675057252248
+        },
+        "xray_report_correction": {
+          "score": 0.43333333333333335,
+          "successes": 13,
+          "totalTrials": 30,
+          "costUsd": 2.4014489333333335,
+          "avgTurns": null,
+          "wallTimeS": 309.22366155783334
+        }
+      },
+      "rank": 4
     },
     {
       "modelLabel": "Opus 4.8",
@@ -163,7 +379,7 @@
           "wallTimeS": 1548.04
         }
       },
-      "rank": 2
+      "rank": 5
     },
     {
       "modelLabel": "GPT 5.5",
@@ -235,7 +451,7 @@
           "wallTimeS": 2889.49
         }
       },
-      "rank": 3
+      "rank": 6
     },
     {
       "modelLabel": "Opus 4.8",
@@ -307,7 +523,7 @@
           "wallTimeS": 1357.15
         }
       },
-      "rank": 4
+      "rank": 7
     },
     {
       "modelLabel": "GPT 5.4",
@@ -377,25 +593,9 @@
           "costUsd": 1.6589,
           "avgTurns": 106.83333333333333,
           "wallTimeS": 1370.63
-        },
-        "compositional_qa": {
-          "score": 0.883,
-          "successes": 0,
-          "totalTrials": 1,
-          "costUsd": 19.3018,
-          "avgTurns": null,
-          "wallTimeS": 3423.53
-        },
-        "longitudinal_monitoring": {
-          "score": 0.798,
-          "successes": 0,
-          "totalTrials": 1,
-          "costUsd": 2.4184,
-          "avgTurns": null,
-          "wallTimeS": 1360.59
         }
       },
-      "rank": 5
+      "rank": 8
     },
     {
       "modelLabel": "Opus 4.7",
@@ -467,7 +667,7 @@
           "wallTimeS": 2142.03
         }
       },
-      "rank": 6
+      "rank": 9
     },
     {
       "modelLabel": "GPT 5.3",
@@ -537,25 +737,9 @@
           "costUsd": 0.8023,
           "avgTurns": 82.61111111111111,
           "wallTimeS": 1495.78
-        },
-        "compositional_qa": {
-          "score": 0.783,
-          "successes": 0,
-          "totalTrials": 1,
-          "costUsd": 3.3542,
-          "avgTurns": null,
-          "wallTimeS": 1385.3
-        },
-        "longitudinal_monitoring": {
-          "score": 0.732,
-          "successes": 0,
-          "totalTrials": 1,
-          "costUsd": 0.8848,
-          "avgTurns": null,
-          "wallTimeS": 925
         }
       },
-      "rank": 7
+      "rank": 10
     },
     {
       "modelLabel": "Opus 4.6",
@@ -627,7 +811,7 @@
           "wallTimeS": 3645.31
         }
       },
-      "rank": 8
+      "rank": 11
     },
     {
       "modelLabel": "Sonnet 4.6",
@@ -699,7 +883,7 @@
           "wallTimeS": 3659
         }
       },
-      "rank": 9
+      "rank": 12
     },
     {
       "modelLabel": "GPT 5.4 Mini",
@@ -769,35 +953,19 @@
           "costUsd": 1.0696,
           "avgTurns": 140.22222222222223,
           "wallTimeS": 1868.63
-        },
-        "compositional_qa": {
-          "score": 0,
-          "successes": 0,
-          "totalTrials": 1,
-          "costUsd": 4.9119,
-          "avgTurns": null,
-          "wallTimeS": 3626.73
-        },
-        "longitudinal_monitoring": {
-          "score": 0.701,
-          "successes": 0,
-          "totalTrials": 1,
-          "costUsd": 1.0337,
-          "avgTurns": null,
-          "wallTimeS": 946.95
         }
       },
-      "rank": 10
+      "rank": 13
     }
   ],
   "partial": [],
   "bestByTask": {
-    "xray_report_correction": 0.4,
-    "tumor_area_selection_pathology": 0.4,
+    "xray_report_correction": 0.43333333333333335,
+    "tumor_area_selection_pathology": 0.5666666666666667,
     "ct_abnormality": 0.333,
-    "ehr_data_quality": 0.417,
+    "ehr_data_quality": 0.7083333333333334,
     "ehr_to_meds_etl": 1,
-    "ehr_event_modelling": 0.778,
-    "clinical_trial_matching": 0.667
+    "ehr_event_modelling": 0.8333333333333334,
+    "clinical_trial_matching": 0.7777777777777778
   }
 }

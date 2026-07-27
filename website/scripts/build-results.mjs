@@ -25,9 +25,14 @@ import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const SRC = resolve(ROOT, 'medcli-paper-latex/figures/baseline_metrics.json');
-const COUNTS = resolve(ROOT, 'medcli-paper-latex/figures/coverage_data.tex');
-const COLLECT = resolve(ROOT, 'medcli-paper-latex/scripts/collect_baseline_metrics.py');
+const PAPER_ROOT_CANDIDATES = [
+  resolve(ROOT, 'medcli-paper-latex'),
+  resolve(ROOT, '../../medcli-website/medcli-paper-latex'),
+];
+const PAPER_ROOT = PAPER_ROOT_CANDIDATES.find((dir) => existsSync(resolve(dir, 'figures/baseline_metrics.json')));
+const SRC = PAPER_ROOT && resolve(PAPER_ROOT, 'figures/baseline_metrics.json');
+const COUNTS = PAPER_ROOT && resolve(PAPER_ROOT, 'figures/coverage_data.tex');
+const COLLECT = PAPER_ROOT && resolve(PAPER_ROOT, 'scripts/collect_baseline_metrics.py');
 const OUT = resolve(ROOT, 'src/data/results.json');
 const LIVE_MEDCLI_CANDIDATES = [
   resolve(ROOT, '../medcli'),
@@ -56,7 +61,7 @@ const TASK_COUNT_KEYS = {
 
 function collectLiveMetrics() {
   const medcliRoot = LIVE_MEDCLI_CANDIDATES.find((dir) => existsSync(resolve(dir, 'paper/baselines.md')));
-  if (!medcliRoot || !existsSync(COLLECT)) return null;
+  if (!medcliRoot || !COLLECT || !existsSync(COLLECT)) return null;
 
   const outPath = resolve(tmpdir(), `medcli-live-baseline-metrics-${process.pid}.json`);
   for (const python of ['python3', 'python']) {
@@ -98,10 +103,13 @@ function describe(harness, model) {
   const suffix = is1m ? ' (1M)' : '';
 
   const NAMES = {
+    'gpt-5-6-sol': 'GPT-5.6-sol',
     'gpt-5-5': 'GPT 5.5',
     'gpt-5-4': 'GPT 5.4',
     'gpt-5-4-mini': 'GPT 5.4 Mini',
     'gpt-5-3-codex': 'GPT 5.3',
+    'claude-opus-5': 'Opus 5',
+    'claude-fable-5': 'Fable 5',
     'claude-opus-4-8': 'Opus 4.8',
     'claude-opus-4-7': 'Opus 4.7',
     'claude-opus-4-6': 'Opus 4.6',
