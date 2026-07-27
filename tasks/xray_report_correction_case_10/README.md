@@ -6,7 +6,7 @@ Given a MIMIC-CXR study, correct the radiology report FINDINGS. The submission i
 
 **Success criteria:** reward 1.0 iff the report has **zero** clinically-significant errors judged by LLM-judge CheXprompt verifier's majority vote.
 
-> **Credentials required.** MIMIC-CXR is PhysioNet-gated — set `PN_USER` / `PN_PASS` in `.env`. Scoring also needs an OpenAI-compatible judge (`OPENAI_API_KEY` / `OPENAI_BASE_URL`, or the Azure `AZURE_OPENAI_*` keys). See [Setting up task access](../../README.md#setting-up-task-access) and [Setting up other secrets](../../README.md#setting-up-other-secrets).
+> **Credentials required.** MIMIC-CXR is PhysioNet-gated — set `PN_USER` / `PN_PASS` in `.env`. Scoring also needs an OpenAI-compatible judge (`CHEXPROMPT_OPENAI_API_KEY` / `CHEXPROMPT_OPENAI_BASE_URL`, or the Azure `CHEXPROMPT_AZURE_OPENAI_*` variables). See [Setting up task access](../../README.md#setting-up-task-access) and [Setting up other secrets](../../README.md#setting-up-other-secrets).
 
 ## Run this task
 
