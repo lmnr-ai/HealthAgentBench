@@ -25,8 +25,11 @@ structured error string in the result row, so a failed verifier never
 masquerades as a passing agent):
 
   * OpenAI env vars exported before the verifier runs:
-    ``OPENAI_API_KEY`` and either ``OPENAI_BASE_URL`` (vanilla OpenAI) or
-    ``OPENAI_API_BASE`` + ``OPENAI_API_VERSION`` (Azure).
+    ``CHEXPROMPT_OPENAI_API_KEY`` and optional
+    ``CHEXPROMPT_OPENAI_BASE_URL`` (vanilla OpenAI), or
+    ``CHEXPROMPT_AZURE_OPENAI_API_KEY``,
+    ``CHEXPROMPT_AZURE_OPENAI_ENDPOINT``, and
+    ``CHEXPROMPT_AZURE_OPENAI_API_VERSION`` (Azure).
     ``CHEXPROMPT_DEPLOYMENT`` selects the model / deployment name
     (e.g. ``gpt-4-1106-preview`` or whichever Azure deployment is in use).
 """
@@ -79,32 +82,22 @@ def _configure_openai_for_chexprompt() -> str | None:
     Azure OpenAI based on env vars. Returns an error string if config is
     invalid, None otherwise. Must be called before importing CheXprompt.
 
-    Accepts both naming conventions:
+    Supported configurations:
 
-    * Azure-canonical (preferred when set):
-        ``AZURE_OPENAI_API_KEY`` / ``AZURE_OPENAI_ENDPOINT`` /
-        ``AZURE_OPENAI_API_VERSION``  (deployment via
-        ``AZURE_OPENAI_DEPLOYMENT`` or ``CHEXPROMPT_DEPLOYMENT``).
-    * Legacy openai-SDK names (works for both vanilla and Azure):
-        ``OPENAI_API_KEY`` / ``OPENAI_API_BASE`` / ``OPENAI_API_VERSION``.
-    * Vanilla OpenAI: ``OPENAI_API_KEY`` (+ optional ``OPENAI_BASE_URL``).
+    * Azure OpenAI: ``CHEXPROMPT_AZURE_OPENAI_API_KEY`` /
+      ``CHEXPROMPT_AZURE_OPENAI_ENDPOINT`` /
+      ``CHEXPROMPT_AZURE_OPENAI_API_VERSION``.
+    * Vanilla OpenAI: ``CHEXPROMPT_OPENAI_API_KEY``
+      (+ optional ``CHEXPROMPT_OPENAI_BASE_URL``).
 
-    Detection order: AZURE_OPENAI_* (if endpoint set) → OPENAI_API_BASE
-    + OPENAI_API_VERSION (Azure-shaped) → vanilla OpenAI.
+    Azure is selected when all three Azure variables are present; otherwise
+    configuration falls through to vanilla OpenAI.
     """
     import openai  # noqa: PLC0415 — defer until we have env
 
-    # Azure-canonical naming has priority when both endpoint and key are set.
-    # Endpoint accepts three aliases: ``AZURE_OPENAI_ENDPOINT`` (canonical),
-    # ``AZURE_OPENAI_BASE_URL`` (sometimes used), or ``OPENAI_API_BASE``
-    # (legacy openai-SDK).
-    azure_endpoint = (
-        os.environ.get("AZURE_OPENAI_ENDPOINT")
-        or os.environ.get("AZURE_OPENAI_BASE_URL")
-        or os.environ.get("OPENAI_API_BASE")
-    )
-    azure_version = os.environ.get("AZURE_OPENAI_API_VERSION") or os.environ.get("OPENAI_API_VERSION")
-    azure_key = os.environ.get("AZURE_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    azure_endpoint = os.environ.get("CHEXPROMPT_AZURE_OPENAI_ENDPOINT")
+    azure_version = os.environ.get("CHEXPROMPT_AZURE_OPENAI_API_VERSION")
+    azure_key = os.environ.get("CHEXPROMPT_AZURE_OPENAI_API_KEY")
 
     if azure_endpoint and azure_version and azure_key:
         openai.api_type = "azure"
@@ -114,14 +107,14 @@ def _configure_openai_for_chexprompt() -> str | None:
         return None
 
     # Fall through to vanilla OpenAI.
-    api_key = os.environ.get("OPENAI_API_KEY")
+    api_key = os.environ.get("CHEXPROMPT_OPENAI_API_KEY")
     if not api_key:
         return (
-            "No API key found — set either AZURE_OPENAI_API_KEY "
-            "(+ AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_API_VERSION) for Azure, "
-            "or OPENAI_API_KEY for vanilla OpenAI."
+            "No API key found — set either CHEXPROMPT_AZURE_OPENAI_API_KEY "
+            "(+ CHEXPROMPT_AZURE_OPENAI_ENDPOINT + CHEXPROMPT_AZURE_OPENAI_API_VERSION) for Azure, "
+            "or CHEXPROMPT_OPENAI_API_KEY for vanilla OpenAI."
         )
-    base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
+    base_url = os.environ.get("CHEXPROMPT_OPENAI_BASE_URL", "https://api.openai.com/v1")
     for suffix in ("/chat/completions", "/completions"):
         if base_url.endswith(suffix):
             base_url = base_url[: -len(suffix)]
@@ -150,13 +143,8 @@ def _call_chexprompt(reference: str, candidate: str) -> dict[str, Any]:
 
     # Default to gpt-5.4 — it's stricter than gpt-4o at counting clinical
     # errors in radiology FINDINGS, which matches the "no clinically
-    # significant error = pass" bar. Override via CHEXPROMPT_DEPLOYMENT
-    # (or AZURE_OPENAI_DEPLOYMENT — same meaning, whichever .env carries).
-    deployment = (
-        os.environ.get("CHEXPROMPT_DEPLOYMENT")
-        or os.environ.get("AZURE_OPENAI_DEPLOYMENT")
-        or "gpt-5.4"
-    )
+    # significant error = pass" bar. Override via CHEXPROMPT_DEPLOYMENT.
+    deployment = os.environ.get("CHEXPROMPT_DEPLOYMENT") or "gpt-5.4"
 
     cfg_err = _configure_openai_for_chexprompt()
     if cfg_err:

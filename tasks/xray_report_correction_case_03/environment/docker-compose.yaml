@@ -42,7 +42,7 @@ services:
       bootstrap:
         condition: service_completed_successfully
     env_file:
-      # OPENAI_API_KEY, OPENAI_BASE_URL, CHEXPROMPT_DEPLOYMENT (verifier).
+      # CHEXPROMPT_OPENAI_API_KEY, CHEXPROMPT_OPENAI_BASE_URL, CHEXPROMPT_DEPLOYMENT (verifier).
       # NOTE: PN_USER / PN_PASS in the same .env do get loaded into main
       # by docker compose, but the verifier doesn't read them — the
       # bootstrap service is what touches PhysioNet. The agent has shell
