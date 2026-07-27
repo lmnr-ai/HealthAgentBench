@@ -128,6 +128,8 @@ X-ray Report Correction is scored by an LLM-based judge based on the [CheXprompt
 verifier auto-detects which is present): **(a) vanilla OpenAI** — set `CHEXPROMPT_OPENAI_API_KEY` and optionally `CHEXPROMPT_OPENAI_BASE_URL`; or **(b) Azure OpenAI** —
 set `CHEXPROMPT_AZURE_OPENAI_API_KEY`, `CHEXPROMPT_AZURE_OPENAI_ENDPOINT`, and `CHEXPROMPT_AZURE_OPENAI_API_VERSION`. To change the default judge, set `CHEXPROMPT_DEPLOYMENT` to a different model or deployment name.
 
+The coding agent also needs credentials. For subscription authentication, run `claude setup-token` and set `CLAUDE_CODE_OAUTH_TOKEN` for Claude Code, or log in to Codex on the host and set `CODEX_FORCE_AUTH_JSON=1` to use `$HOME/.codex/auth.json`. Alternatively, configure `ANTHROPIC_API_KEY` for Claude Code or `OPENAI_API_KEY` for Codex. `ANTHROPIC_BASE_URL` and `OPENAI_BASE_URL` are optional and are only needed when using third-party endpoints. See `.env.example` for the template.
+
 ### Exporting environment variables from .env
 Make sure you have `.env` at this repo directory so that the containers can read the environment variables. 
 ```bash
