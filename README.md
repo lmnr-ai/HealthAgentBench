@@ -23,6 +23,7 @@
 </p>
 
 ## 📢 Updates
+* 2026-07-27: We added results from Claude Code Opus-5 and Codex GPT-5.6-sol
 * 2026-07-03: We released the benchmark.
 * 2026-07-01: We released our [paper](https://arxiv.org/abs/2606.31179) and [website](https://microsoft.github.io/HealthAgentBench/).
 
@@ -159,7 +160,7 @@ Harbor will print out a `mean` column that records the success rate and all the 
 Note: 
 1. The harbor runs above will download data and mount the data to `assets/<task_category>/` to speed up multiple task setups using the same data assets. You will need at least 30GB on disk available to download the data assets. 
 2. This repo does not host labels, but the harbor runs above will fetch gold labels which will appear under `tasks/<task_name>/tests` after the run.
-3. We suggest disallowing web browsing / web fetching when running this benchmark, so the agent can't cheat by searching for gold labels online. Refer to Harbor documentation for how to disable web browsing tools for each agent (you might need to use special cli flags).
+3. We suggest disallowing web browsing / web fetching when running this benchmark, so the agent can't cheat by searching for gold labels online. Harbor's built-in Codex agent has no web-search toggle, so you need to create a thin wrapper that subclasses it and adds a CliFlag mapping a kwarg (eg. disable_web_search) to Codex's -c web_search="disabled" config override (see the [Codex config reference](https://developers.openai.com/codex/config-reference) and the [Harbor agents docs](https://deepwiki.com/harbor-framework/harbor/4-agents)).
 4. Check the exception errors (if any) reported by Harbor. We treat agenttimeout trials as failures (reward=0) when reporting the overall success rate.
 
 
