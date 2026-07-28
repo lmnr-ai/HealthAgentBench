@@ -40,7 +40,7 @@ clinical or biomedical problem, then a task-specific verifier scores the result.
   <img src="assets/hero_chart.png" alt="Task success rate across 54 × 3 trials for frontier agents, with cost and time per task" width="820" />
 </p>
 <p align="center">
-  <em>Task success rate across all 54 × 3 trials (Wilson 95% CI), with cost and time per task. Even the strongest agent solves only 42% of tasks.</em>
+  <em>Task success rate across all 54 × 3 trials (Wilson 95% CI), with cost and time per task.</em>
 </p>
 
 ### Task Categories
