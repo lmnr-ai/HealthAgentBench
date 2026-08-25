@@ -1,5 +1,3 @@
-website/.astro/
-website/node_modules/
 .agent/
 # Python-generated files
 __pycache__/
@@ -18,22 +16,18 @@ results/
 # temporary files
 .tmp/
 
-# Per-task gold is derived in-container at run time from the downloaded report
-# (see scripts/ct_abnormality/gold_derivation.py) and written here by the
-# bootstrap. It is never committed — the answer key / report text stay out of git.
-tasks/ct_abnormality_*/tests/gold.json
 # clinical_trial_matching: the patient note (topic.txt) and relevance-judgment
 # answer key (qrels.txt) are the TREC benchmark data. They are NOT committed —
-# the bootstrap downloads topics2021.xml / qrels2021.txt at run time and
+# the bootstrap downloads topics<YEAR>.xml / qrels<YEAR>.txt at run time and
 # extract_task_inputs.py writes them (qrels.txt into tests/ via a host
 # bind-mount; topic.txt only into the in-container workspace volume).
 tasks/clinical_trial_matching_*/tests/qrels.txt
 tasks/clinical_trial_matching_*/environment/workspace/topic.txt
-tasks/ehr_event_modelling_*/tests/test_labels.csv
-# MIMIC-CXR verifier-only artifacts written by the per-task bootstrap
-# service from credentialed PhysioNet downloads. Never commit —
-# PhysioNet redistribution rules apply.
-tasks/xray_report_correction_*/tests/target_report.txt
+
+# Downloaded TREC artifacts + per-NCT XML cache used by scripts/trec_ct and
+# mounted into the task bootstrap. Large and fully re-derivable; never commit.
+assets/clinical_trial_matching/
+
 # local convenience helpers
 resume-codex.sh
 # project-level env file (schema documented in README.md; never commit secrets)
