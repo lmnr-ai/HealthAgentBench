@@ -37,4 +37,6 @@ uv run harbor run \
 
 The candidate pool for each topic is an audited subset: the clean-eligible trials (gold) plus non-eligible distractors. Pool size 500, gold size 5.
 
+**Gold provenance: `llm-audit:claude-sonnet-5`.** Every gold trial was graded eligible (grade 2) by TREC's human assessors first; the audit step is a second, stricter filter over those. See [`provenance/`](../../provenance/README.md).
+
 - TREC Clinical Trials 2022: <https://www.trec-cds.org/2022.html>

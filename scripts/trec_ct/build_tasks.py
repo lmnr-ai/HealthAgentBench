@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import re
 import shlex
 import sys
 from pathlib import Path
@@ -40,6 +41,11 @@ import trec_data as td
 
 VERBATIM_ENV_FILES = ("Dockerfile", "fetch_trials.py", "extract_task_inputs.py")
 VERBATIM_TEST_FILES = ("harbor_evaluator.py", "verify.py", "test.sh")
+
+# What a task's ``metadata.gold_source`` says when it predates the marker. Only
+# upstream's original 9 tasks were ever in that state.
+UPSTREAM_GOLD_SOURCE = "microsoft-hand-audit"
+_GOLD_SOURCE_RE = re.compile(r'^\s*gold_source\s*=\s*"([^"]*)"', re.MULTILINE)
 
 
 def task_name(year: td.Year, topic_id: int) -> str:
@@ -77,6 +83,29 @@ def load_audit(path: Path, year: td.Year) -> dict[int, list[str]]:
     return {k: sorted(set(v)) for k, v in gold.items()}
 
 
+def audit_gold_source(path: Path, year: td.Year) -> str:
+    """``llm-audit:<model>`` for the models that produced this year's verdicts."""
+    models = {
+        row.get("model")
+        for line in path.read_text().splitlines()
+        if line.strip()
+        for row in [json.loads(line)]
+        if row.get("year") == year.year and row.get("model")
+    }
+    return "llm-audit:" + ("+".join(sorted(models)) if models else "unknown")
+
+
+def existing_gold_source(task_dir: Path) -> str:
+    """Read ``metadata.gold_source`` back out of a generated task.
+
+    Tasks written before the marker existed are upstream's original 9, so that
+    is what a missing marker means — never a silent "unknown".
+    """
+    toml = task_dir / "task.toml"
+    match = _GOLD_SOURCE_RE.search(toml.read_text()) if toml.is_file() else None
+    return match.group(1) if match else UPSTREAM_GOLD_SOURCE
+
+
 def load_existing_gold(tasks_dir: Path, year: td.Year) -> dict[int, list[str]]:
     """Read gold back out of already-generated task dirs (round-trip check)."""
     gold: dict[int, list[str]] = {}
@@ -102,6 +131,7 @@ def write_task(
     pool: list[str],
     *,
     seed: int,
+    gold_source: str,
 ) -> None:
     name = task_name(year, topic_id)
     task_dir = out_dir / name
@@ -138,7 +168,11 @@ def write_task(
         env_dir / "docker-compose.yaml",
         {"CACHE_MOUNT": cache_mount.as_posix()},
     )
-    td.render_template("task.toml.tmpl", task_dir / "task.toml", {"TASK_ID": name})
+    td.render_template(
+        "task.toml.tmpl",
+        task_dir / "task.toml",
+        {"TASK_ID": name, "GOLD_SOURCE": gold_source},
+    )
     td.render_template(
         "instruction.md.tmpl",
         task_dir / "instruction.md",
@@ -158,6 +192,7 @@ def write_task(
             "PATIENT_DOC_PHRASE": year.patient_doc_phrase,
             "POOL_SIZE": str(len(pool)),
             "GOLD_SIZE": str(len(gold)),
+            "GOLD_SOURCE": gold_source,
         },
     )
 
@@ -198,8 +233,19 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.audit:
         gold_by_topic = load_audit(args.audit, year)
+        source_of = dict.fromkeys(
+            gold_by_topic, audit_gold_source(args.audit, year)
+        )
     else:
         gold_by_topic = load_existing_gold(args.gold_from_existing, year)
+        # Regenerating must never relabel a task: carry each one's existing
+        # marker across, so upstream's 9 stay upstream's.
+        source_of = {
+            topic_id: existing_gold_source(
+                args.gold_from_existing / task_name(year, topic_id)
+            )
+            for topic_id in gold_by_topic
+        }
     if not gold_by_topic:
         raise SystemExit(
             f"[build] no {year.year} gold found in the requested source "
@@ -240,7 +286,15 @@ def main(argv: list[str] | None = None) -> int:
         pool = td.build_pool(
             qrels[topic_id], gold, max_pool=args.max_pool, seed=args.seed + topic_id
         )
-        write_task(args.out, year, topic_id, gold, pool, seed=args.seed)
+        write_task(
+            args.out,
+            year,
+            topic_id,
+            gold,
+            pool,
+            seed=args.seed,
+            gold_source=source_of[topic_id],
+        )
         written += 1
         print(
             f"[build] {task_name(year, topic_id)}: pool={len(pool)} gold={len(gold)}"

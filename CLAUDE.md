@@ -16,6 +16,7 @@ GitHub Pages deploy workflow — do not restore them, the data is gated.
 | `tasks/clinical_trial_matching_*` | **Generated output.** Harbor 0.8.0 task dirs. |
 | `scripts/trec_ct/` | The generator: year registry, LLM auditor, task builder. |
 | `scripts/trec_ct/templates/` | **Source of truth** for every file inside a task. |
+| `provenance/` | Committed record of who audited each task's gold, and every verdict. |
 | `docs/TREC_CT_ENRICHMENT.md` | Reverse-engineered recipe, per-year survey, cost estimates, runbook. |
 
 Read `docs/TREC_CT_ENRICHMENT.md` before touching anything under `scripts/trec_ct`.
@@ -31,6 +32,13 @@ Read `docs/TREC_CT_ENRICHMENT.md` before touching anything under `scripts/trec_c
 - **Un-audited TREC grade-2 trials must stay out of the candidate pool.** The
   pool is `all grade-0 + all grade-1 + audited gold`. A grade-2 left in the pool
   is a hidden positive and makes the task's `recall@top50 == 1.0` unpassable.
+- **Regenerating a task must never relabel its gold.** Each `task.toml` carries
+  `metadata.gold_source` — `microsoft-hand-audit` for upstream's original 9 (2021
+  topics 6, 8, 19, 26, 27, 29, 35, 45, 75), `llm-audit:<model>` for ours. Task
+  *names* don't distinguish them: 2021 tasks all use upstream's bare naming.
+  `--gold-from-existing` reads each task's existing marker back and preserves it;
+  only `--audit` sets a new one. Re-export the index after any change to `tasks/`:
+  `python scripts/trec_ct/export_provenance.py --years 2021 2022`.
 - **Never commit topics or qrels.** `topic.txt` (the patient description) and
   `qrels.txt` (the answer key) are TREC-redistributable-by-nobody; each task
   downloads them at run time. Only NCT IDs and our own audit output are tracked.
