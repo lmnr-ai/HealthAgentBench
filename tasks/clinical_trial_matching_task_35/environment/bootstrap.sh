@@ -38,8 +38,8 @@ mkdir -p "$CACHE" "$LOCK_DIR" "$DATA" "$TRIALS"
 cp /workspace/topic_id.txt "$DATA/topic_id.txt"
 TOPIC_ID="$(tr -dc '0-9' < /workspace/topic_id.txt)"
 
-# Derive the agent-visible patient note + verifier-only qrels at run time.
-# Neither topic.txt nor qrels.txt is committed to the repo (that would
+# Derive the agent-visible patient description + verifier-only qrels at run
+# time. Neither topic.txt nor qrels.txt is committed to the repo (that would
 # redistribute the TREC benchmark data); extract_task_inputs.py downloads
 # topics2021.xml + qrels2021.txt on cache miss and writes:
 #   - /workspace/data/topic.txt  (agent-visible patient note)
@@ -53,7 +53,9 @@ python3 /opt/ctm/extract_task_inputs.py \
     --topic-id "$TOPIC_ID" \
     --cache-dir "$CACHE" \
     --topic-out "$DATA/topic.txt" \
-    --qrels-out /tests/qrels.txt
+    --qrels-out /tests/qrels.txt \
+    --topics-url "https://trec.nist.gov/data/trials/topics2021.xml" \
+    --qrels-url "https://trec.nist.gov/data/trials/qrels2021.txt"
 flock -u 8
 
 # Re-grant write permissions for the lock window (a previous run may have
@@ -78,7 +80,8 @@ _fetch() {
         --out "$TRIALS" \
         --cache-dir "$CACHE" \
         --user-agent "clinical_trial_matching/1.0 (medcli benchmark)" \
-        --retries 3
+        --retries 3 \
+        --zip-urls https://www.trec-cds.org/2021_data/ClinicalTrials.2021-04-27.part1.zip https://www.trec-cds.org/2021_data/ClinicalTrials.2021-04-27.part2.zip https://www.trec-cds.org/2021_data/ClinicalTrials.2021-04-27.part3.zip https://www.trec-cds.org/2021_data/ClinicalTrials.2021-04-27.part4.zip https://www.trec-cds.org/2021_data/ClinicalTrials.2021-04-27.part5.zip
 }
 
 if _all_cached; then
