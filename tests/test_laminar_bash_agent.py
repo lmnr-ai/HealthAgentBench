@@ -43,14 +43,18 @@ class _ExecResult:
 class _FakeEnvironment:
     """Records commands and replays a canned stdout for the probe."""
 
-    def __init__(self, probe_stdout: str = ""):
+    def __init__(self, probe_stdout: str = "", return_code: int = 0, stderr: str = ""):
         self.environment_dir = TASK_DIR / "environment"
         self.probe_stdout = probe_stdout
+        self.return_code = return_code
+        self.stderr = stderr
         self.commands: list[str] = []
 
     async def exec(self, command, cwd=None, env=None, timeout_sec=None, user=None):
         self.commands.append(command)
-        return _ExecResult(stdout=self.probe_stdout)
+        return _ExecResult(
+            stdout=self.probe_stdout, stderr=self.stderr, return_code=self.return_code
+        )
 
 
 @pytest.fixture
@@ -82,6 +86,46 @@ async def test_answer_key_guard_aborts_when_gold_is_reachable(agent):
     environment = _FakeEnvironment(probe_stdout="/tests/gold.txt\n/tests/qrels.txt\n")
     with pytest.raises(RuntimeError, match="answer key reachable"):
         await agent._assert_answer_key_absent(environment)
+
+
+@pytest.mark.asyncio
+async def test_write_submission_normalizes_a_stringified_array(agent):
+    """A model that sends `nct_ids` as one string is a slip, not a null answer.
+
+    Iterating a str walks characters, which used to turn a perfectly good
+    one-shot answer into an empty submission and end the run.
+    """
+    environment = _FakeEnvironment()
+    output, text = await agent._write_submission(
+        environment, "NCT00304863, NCT00644046 and NCT02681068"
+    )
+    assert text.split() == ["NCT00304863", "NCT00644046", "NCT02681068"]
+    assert "Wrote 3 NCT IDs" in output
+
+
+@pytest.mark.asyncio
+async def test_write_submission_does_not_end_the_run_when_the_write_fails(agent):
+    """An empty second element is what keeps the loop going.
+
+    Returning the in-memory text here would end the run as `submitted` and score
+    an answer the container never received -- so the trajectory's
+    `gt_event_identified` would disagree with Harbor's reward.
+    """
+    environment = _FakeEnvironment(return_code=1, stderr="no space left on device")
+    output, text = await agent._write_submission(environment, ["NCT00304863"])
+    assert text == ""
+    assert "failed to write submission" in output
+    assert "has not ended" in output
+
+
+@pytest.mark.asyncio
+async def test_write_submission_rejects_input_with_no_nct_ids(agent):
+    environment = _FakeEnvironment()
+    output, text = await agent._write_submission(environment, ["none of them", ""])
+    assert text == ""
+    assert "no NCT identifiers" in output
+    # Nothing was written, so the sandbox was never touched.
+    assert environment.commands == []
 
 
 def test_task_facts_read_provenance_off_the_task_dir(agent):

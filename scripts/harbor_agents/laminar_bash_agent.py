@@ -398,16 +398,37 @@ class LaminarBashAgent(BaseAgent):
         return _truncate("\n".join(parts).strip() or "[no output]")
 
     async def _write_submission(
-        self, environment: BaseEnvironment, nct_ids: list[str]
+        self, environment: BaseEnvironment, nct_ids: Any
     ) -> tuple[str, str]:
-        """Write the submission into the sandbox. Returns (tool_output, text)."""
+        """Write the submission into the sandbox.
+
+        Returns ``(tool_output, text_on_disk)``. The second element is empty
+        unless the file really landed, because it is what the run ends on and
+        what we score host-side -- and a host-side verdict computed from a
+        submission the container never got would disagree with Harbor's reward,
+        which is the one thing this agent must never do.
+        """
+        # A model that emits `nct_ids` as one string instead of an array is a
+        # normal tool-calling slip; iterating it would walk characters and throw
+        # a perfectly good answer away.
+        raw_ids = _NCT_RE.findall(nct_ids) if isinstance(nct_ids, str) else list(nct_ids or [])
+
         clean: list[str] = []
         seen: set[str] = set()
-        for raw in nct_ids:
+        for raw in raw_ids:
             match = _NCT_RE.search(str(raw))
             if match and match.group(0).upper() not in seen:
                 seen.add(match.group(0).upper())
                 clean.append(match.group(0).upper())
+        if not clean:
+            # Don't end the run on an empty answer -- hand the model the problem.
+            return (
+                (
+                    "[no NCT identifiers found in nct_ids. Pass an array of IDs "
+                    'like ["NCT01234567", ...]. The run has not ended; try again.]'
+                ),
+                "",
+            )
         text = "\n".join(clean) + "\n"
 
         target = "/workspace/submission/eligible_trials.txt"
@@ -419,7 +440,13 @@ class LaminarBashAgent(BaseAgent):
         )
         result = await environment.exec(script, timeout_sec=60)
         if result.return_code != 0:
-            return f"[failed to write submission: {result.stderr}]", text
+            return (
+                (
+                    f"[failed to write submission: {result.stderr}] The run has "
+                    "not ended; fix the problem and call write_submission again."
+                ),
+                "",
+            )
         return f"Wrote {len(clean)} NCT IDs to {target}.", text
 
     # -- the loop ---------------------------------------------------------
@@ -545,7 +572,10 @@ class LaminarBashAgent(BaseAgent):
                     elif fn == "write_submission":
                         ids = arguments.get("nct_ids") or []
                         output, submission_text = await self._write_submission(environment, ids)
-                        self._submission = [x for x in submission_text.splitlines() if x]
+                        # Only on a write that landed: leaving `_submission` None
+                        # keeps the "you never submitted" nudge armed.
+                        if submission_text:
+                            self._submission = [x for x in submission_text.splitlines() if x]
                     else:
                         output, submission_text = f"[unknown tool: {fn}]", None
                     Laminar.set_span_output(output)
