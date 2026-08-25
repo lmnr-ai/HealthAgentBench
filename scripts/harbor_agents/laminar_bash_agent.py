@@ -94,8 +94,9 @@ couple of files, write a script.
 command's output small and focused.
 - Work through the whole candidate pool. Do not stop after the first few \
 promising trials.
-- When you are done, call write_submission exactly once with your final answer. \
-That ends the run.\
+- When you are done, call write_submission with your final answer. A successful \
+call ends the run, so make exactly one -- but if it comes back reporting an \
+error, nothing was recorded: fix the problem and call it again.\
 """
 
 TOOLS: list[dict[str, Any]] = [
@@ -122,8 +123,10 @@ TOOLS: list[dict[str, Any]] = [
         "function": {
             "name": "write_submission",
             "description": (
-                "Write the final answer and end the run. Call this exactly once, "
-                "when you have finished reviewing the candidate pool."
+                "Write the final answer, when you have finished reviewing the "
+                "candidate pool. A successful call ends the run, so make exactly "
+                "one. If the call reports an error the answer was not recorded "
+                "and the run is still going: correct it and call again."
             ),
             "parameters": {
                 "type": "object",
