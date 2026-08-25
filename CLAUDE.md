@@ -17,6 +17,7 @@ GitHub Pages deploy workflow — do not restore them, the data is gated.
 | `scripts/trec_ct/` | The generator: year registry, LLM auditor, task builder. |
 | `scripts/trec_ct/templates/` | **Source of truth** for every file inside a task. |
 | `provenance/` | Committed record of who audited each task's gold, and every verdict. |
+| `scripts/harbor_agents/` | The trajectory agent and its trace verifier. |
 | `docs/TREC_CT_ENRICHMENT.md` | Reverse-engineered recipe, per-year survey, cost estimates, runbook. |
 
 Read `docs/TREC_CT_ENRICHMENT.md` before touching anything under `scripts/trec_ct`.
@@ -45,10 +46,65 @@ Read `docs/TREC_CT_ENRICHMENT.md` before touching anything under `scripts/trec_c
 - **`bootstrap.sh`, `fetch_trials.py` and `extract_task_inputs.py` are
   bind-mounted into the `bootstrap` service only**, never baked into the agent's
   image — they name the TREC source URLs and the qrels filename, so a web-capable
-  agent that could read them could fetch the answers.
+  agent that could read them could fetch the answers. The trajectory agent probes
+  for `/tests/gold.txt` on every trial and refuses to record a trajectory if it
+  is reachable, so a bad compose edit fails the run instead of quietly producing
+  trajectories where the model could read the answers.
 - `extract_task_inputs.py` is imported by `trec_data.py` *and* copied into every
   task, so host-side generation and in-container bootstrap can never disagree
   about how `topic.txt` is rendered. Keep it dependency-free (stdlib only).
+
+## Generating trajectories
+
+`scripts/harbor_agents/laminar_bash_agent.py` is a bash tool-loop that runs
+**on the host** — Harbor calls `BaseAgent.run()` in-process and hands it an
+`environment` handle that proxies into the sandbox, so every LLM and tool call
+is ours to shape. That is why it exists instead of `-a codex` / `-a claude-code`:
+those shell a CLI into the sandbox and emit telemetry we don't control. The
+trace is deliberately two levels — root `DEFAULT` → flat `LLM` / `TOOL` siblings.
+
+```bash
+HAB_LMNR_PROJECT_API_KEY=... uv run harbor run --jobs-dir jobs --job-name sliceN \
+  -p tasks -i clinical_trial_matching_2022_task_13 \
+  --agent-import-path scripts.harbor_agents.laminar_bash_agent:LaminarBashAgent \
+  -m gpt-5.6-luna \
+  --ak base_url=https://laminar-resource.services.ai.azure.com/openai/v1 \
+  --ak api_key_var=AZURE_API_KEY --ak lmnr_key_var=HAB_LMNR_PROJECT_API_KEY \
+  --env daytona
+HAB_LMNR_PROJECT_API_KEY=... uv run python scripts/harbor_agents/verify_traces.py \
+  --minutes 10 --key-var HAB_LMNR_PROJECT_API_KEY
+```
+
+Non-obvious things that cost time:
+
+- **Pass `--ak lmnr_key_var=...`, don't rely on `LMNR_PROJECT_API_KEY`.** That
+  name is generic enough that the surrounding environment (a Laminar coding
+  sandbox, for one) often already exports one, and the run will happily write an
+  entire batch of trajectories into somebody else's project. The agent logs the
+  var it used and the key's first 6 chars, so a misroute is at least diagnosable
+  after the fact — `verify_traces.py --key-var` must be given the same var.
+- **`Laminar.initialize(set_global_tracer_provider=False)` is required.** The
+  Daytona SDK self-instruments via `trace.get_tracer()` on the *global* provider
+  (`daytona/_utils/otel_decorator.py`); claiming that provider exports a stray
+  single-span root trace for every SDK call (`AsyncFileSystem.search_files`,
+  `AsyncSandbox.delete`, …) — 136 of them in one 1-task run. Restricting
+  `instruments={Instruments.OPENAI}` does **not** prevent it; Laminar's own
+  instrumentors resolve through its `TracerWrapper`, so OpenAI spans are
+  unaffected by opting out.
+- **`openai` is capped below 3.0 by harbor's litellm pin**, not by us.
+- Azure's OpenAI-compatible `/openai/v1` surface authenticates on an `api-key`
+  header, which the OpenAI SDK never sends; the agent adds it when the base URL
+  contains `azure`. `gpt-5.6-luna` also needs `max_completion_tokens`.
+- The agent scores its own submission by importing the task's *own*
+  `tests/harbor_evaluator.py` host-side, so `gt_event_identified` can't drift
+  from Harbor's reward. Verified identical on every slice so far — if you change
+  one, don't reimplement the other.
+- Daytona's DinD strategy handles the 2-service compose, but the raw-XML cache
+  bind mount escapes the task dir and doesn't exist on the VM, so `bootstrap.sh`
+  falls through to its network download path. Costs ~1 min/task, nothing else.
+- Harbor's `DaytonaClientManager._cleanup_sync` atexit hook raises
+  `CancelledError` after a successful run. It's noise; the job is already
+  written to `jobs/<name>/result.json`.
 
 ## Environment
 

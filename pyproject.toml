@@ -14,7 +14,10 @@ dependencies = [
     "aiolimiter>=1.2.1",
     "anthropic>=0.84.0",
     "filelock>=3.25.0",
-    "harbor==0.8.0",
+    "harbor[daytona]==0.8.0",
+    "lmnr>=0.7.60",
+    # openai is capped below 3.0 by harbor's litellm pin, not by us.
+    "openai>=2.54.0,<3",
     "python-dotenv>=1.2.2",
     "pyyaml>=6.0.3",
     "remotezip>=0.12.3",

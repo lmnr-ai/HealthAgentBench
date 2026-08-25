@@ -34,3 +34,6 @@ resume-codex.sh
 .env
 .env.local
 .env.*.local
+
+# Harbor run output (trajectories live in Laminar; these are local job artifacts)
+jobs/
