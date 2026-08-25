@@ -21,7 +21,13 @@ don't want. So this fork keeps exactly one category:
 
 | Category | # Tasks | Dataset | Access |
 | --- | --- | --- | --- |
-| Clinical Trial Matching (`clinical_trial_matching`) | 9 | TREC Clinical Trials 2021 | Public, un-gated |
+| Clinical Trial Matching (`clinical_trial_matching_task_*`) | 67 | TREC Clinical Trials 2021 | Public, un-gated |
+| Clinical Trial Matching (`clinical_trial_matching_2022_task_*`) | 43 | TREC Clinical Trials 2022 | Public, un-gated |
+
+Upstream shipped 9 of these (2021 topics 6, 8, 19, 26, 27, 29, 35, 45, 75) and
+no generator. The other 101 were built with `scripts/trec_ct/` — see
+[docs/TREC_CT_ENRICHMENT.md](docs/TREC_CT_ENRICHMENT.md). The original 9 keep
+Microsoft's hand-audited gold and are byte-for-byte unchanged.
 
 Removed in this fork: `xray_report_correction`, `ct_abnormality`,
 `ehr_data_quality`, `ehr_event_modelling`, `ehr_to_meds_etl`,
@@ -95,13 +101,11 @@ Notes:
 
 ## Growing the benchmark
 
-The 9 committed tasks are a small slice of what TREC Clinical Trials offers:
-
-| Track year | Topics | Format | Corpus | Reusable here? |
+| Track year | Topics | Format | Corpus | Status |
 | --- | --- | --- | --- | --- |
-| 2021 | 75 (9 used) | Free-text admission note | `ClinicalTrials.2021-04-27` | **Yes — 66 more topics, zero new plumbing** |
-| 2022 | 50 | Free-text admission note | *Same* `ClinicalTrials.2021-04-27` | **Yes — drop-in, zero new plumbing** |
-| 2023 | 40 (37 judged) | Structured questionnaire fields | `ClinicalTrials.2023-05-08` (different) | Yes, with a topic renderer + new corpus URLs |
+| 2021 | 75 | Free-text admission note | `ClinicalTrials.2021-04-27` | **67 built** (8 topics yielded < 3 audited-eligible trials) |
+| 2022 | 50 | Free-text admission note | *Same* `ClinicalTrials.2021-04-27` | **43 built** (7 short of `--min-gold`) |
+| 2023 | 40 (37 judged) | Structured questionnaire fields | `ClinicalTrials.2023-05-08` (different) | Supported by the tooling, not built yet |
 
 `scripts/trec_ct/` contains everything needed to build new tasks for any of
 those years. See **[docs/TREC_CT_ENRICHMENT.md](docs/TREC_CT_ENRICHMENT.md)** for

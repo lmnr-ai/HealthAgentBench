@@ -234,6 +234,24 @@ eligible — this column measures divergence from their sample, not wrongness.
 
 ### Observed yield
 
+Full runs, `claude-sonnet-5` at `--min-confidence 0.7`, `--sample-per-topic 24`
+with a second pass at 48 for topics that came up short:
+
+| Year | Topics audited | Candidates audited | Promoted to gold | Tasks built |
+| --- | --- | --- | --- | --- |
+| 2021 | 75 | 2,009 | 433 (21.6%) | 67 / 75 |
+| 2022 | 50 | 1,308 | 296 (22.6%) | 43 / 50 |
+
+Roughly 4-6 gold per topic at 24 candidates, which lands squarely in upstream's
+observed 3-9. The topics that don't make it are the ones where the auditor
+finds fewer than `--min-gold` trials it will commit to; doubling the sample to
+48 rescued about half of them (2021: 16 short → 8; 2022: 11 short → 7) and the
+remainder did not improve, so they are left unbuilt rather than built on a
+lowered bar. Relaxing `--min-confidence` would convert them, at the cost of the
+one error that actually breaks a task.
+
+Earlier small probes, kept for the 2023 signal:
+
 | Year | Probe | Candidates audited | Promoted to gold |
 | --- | --- | --- | --- |
 | 2022 | topics 1-2, 10 candidates each | 20 | 6 (3 per topic) |
@@ -308,9 +326,12 @@ naming so the existing 9 round-trip; 2022/2023 tasks are named
 
 ## 6. Verification performed
 
-- Round-trip: regenerating all 9 committed 2021 tasks reproduces
-  `pool_ncts.txt` and `gold.txt` byte-for-byte, and `trial_ncts.txt` as an
-  identical set (ordering is a deliberate shuffle).
+- Round-trip: regenerating all 110 committed tasks (67 × 2021, 43 × 2022)
+  reproduces `pool_ncts.txt` and `gold.txt` byte-for-byte, and `trial_ncts.txt`
+  as an identical set (ordering is a deliberate shuffle). The 9 upstream tasks
+  are the load-bearing ones here — their gold is Microsoft's, not ours.
+- No pool in any of the 110 tasks contains an un-audited grade-2 trial, so
+  `recall@top50 == 1.0` is reachable in every one of them.
 - `extract_task_inputs.py` renders topic 1 correctly for all three years,
   including the 2023 questionnaire path, and writes matching per-topic qrels.
 - End-to-end generation for 2022 (topic 1) and 2023 (topic 4) from real audits,
@@ -326,8 +347,19 @@ naming so the existing 9 round-trip; 2022/2023 tasks are named
   | one gold missing | 0 | 0.80 | 0.80 | 1.000 |
   | gold + 2 hallucinated NCTs | 1 | 1.00 | 1.00 | 1.000 (2 discarded) |
 
-**Not** verified: an actual `harbor run`. Docker was unavailable in the
-environment this work was done in, so the container bootstrap path (compose
-ordering, bind mounts, the `flock` cache dance) is unchanged-by-construction for
-2021 and reasoned-about for 2022/2023, not executed. Run one 2021 task before
-trusting a bulk 2022 generation.
+**Not** verified: an actual `harbor run`. Docker is unavailable in the sandbox
+this work was done in, so the container bootstrap path (compose ordering, bind
+mounts, the `flock` cache dance) is unchanged-by-construction for 2021 and
+reasoned-about for 2022, not executed.
+
+The remote-sandbox route is one credential away. `harbor run --env daytona -a
+claude-code -m claude-sonnet-5 --task tasks/clinical_trial_matching_task_19`
+resolves the task, the agent and the model, and then stops at:
+
+> Daytona requires either `DAYTONA_API_KEY`, or both `DAYTONA_JWT_TOKEN` and
+> `DAYTONA_ORGANIZATION_ID`, to be set.
+
+Harbor's Daytona backend also needs the `daytona` SDK (`uv pip install daytona`,
+0.207.0 works) which is not in `pyproject.toml` — add it to the dev group if we
+standardize on this route. Run a handful of tasks per year this way before
+trusting the set at scale.
