@@ -215,14 +215,22 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("[audit] no topics selected")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    done: set[tuple[int, str]] = set()
+    # Resume state is keyed on (year, topic, nct), never (topic, nct): topic
+    # numbers restart every track and 2021/2022 share a corpus, so the same NCT
+    # under the same topic number is a different patient in a different year and
+    # must be audited again.
+    done: set[tuple[int, int, str]] = set()
     if args.out.exists():
         for line in args.out.read_text().splitlines():
             if not line.strip():
                 continue
             row = json.loads(line)
-            done.add((row["topic_id"], row["nct_id"]))
-        _log(f"[audit] resuming: {len(done)} candidates already audited")
+            done.add((row.get("year"), row["topic_id"], row["nct_id"]))
+        this_year = sum(1 for y, _, _ in done if y == args.year)
+        _log(
+            f"[audit] resuming: {this_year} {args.year} candidates already audited"
+            + (f" ({len(done) - this_year} row(s) from other years)" if len(done) > this_year else "")
+        )
 
     # Sample candidates first so the XML fetch is one batched pass over the
     # remote zips instead of one range-request storm per topic.
@@ -238,7 +246,9 @@ def main(argv: list[str] | None = None) -> int:
             rng.sample(eligible, min(args.sample_per_topic, len(eligible)))
         )
         plan.extend(
-            (topic_id, nct) for nct in sample if (topic_id, nct) not in done
+            (topic_id, nct)
+            for nct in sample
+            if (args.year, topic_id, nct) not in done
         )
 
     if not plan:

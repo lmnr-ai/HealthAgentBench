@@ -19,6 +19,7 @@ if TREC is unreachable and nothing is cached.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from urllib.error import URLError
@@ -101,3 +102,47 @@ def test_pool_holds_no_unaudited_grade_2(task_dir: Path):
     assert not hidden, f"topic {topic_id}: hidden positives in pool: {sorted(hidden)}"
     assert gold <= pool
     assert all(judged.get(nct) == td.GRADE_ELIGIBLE for nct in gold)
+
+
+def _write_audit(path: Path, rows: list[dict]) -> Path:
+    path.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    return path
+
+
+def test_load_audit_ignores_other_years(tmp_path: Path):
+    """Topic numbers restart every track, so gold must be keyed on (year, topic)."""
+    audit = _write_audit(
+        tmp_path / "mixed.jsonl",
+        [
+            {"year": 2021, "topic_id": 12, "nct_id": "NCT00000001", "clean_eligible": True},
+            {"year": 2022, "topic_id": 12, "nct_id": "NCT00000002", "clean_eligible": True},
+            {"year": 2022, "topic_id": 12, "nct_id": "NCT00000003", "clean_eligible": False},
+        ],
+    )
+    assert build_tasks.load_audit(audit, td.get_year(2022)) == {12: ["NCT00000002"]}
+    assert build_tasks.load_audit(audit, td.get_year(2021)) == {12: ["NCT00000001"]}
+    # An audit for a year we aren't building yields nothing rather than mis-keyed gold.
+    assert build_tasks.load_audit(audit, td.get_year(2023)) == {}
+
+
+def test_build_rejects_gold_that_is_not_grade_2_for_the_year(tmp_path: Path):
+    """The guard that catches a gold source built against a different year."""
+    try:
+        qrels = td.load_qrels(td.get_year(2021))
+    except (URLError, OSError) as exc:  # pragma: no cover - offline CI
+        pytest.skip(f"TREC qrels unavailable: {exc!r}")
+
+    not_eligible = sorted(
+        nct for nct, grade in qrels[19].items() if grade != td.GRADE_ELIGIBLE
+    )[:4]
+    audit = _write_audit(
+        tmp_path / "wrong.jsonl",
+        [
+            {"year": 2021, "topic_id": 19, "nct_id": nct, "clean_eligible": True}
+            for nct in not_eligible
+        ],
+    )
+    with pytest.raises(SystemExit, match="not.*grade-2"):
+        build_tasks.main(
+            ["--year", "2021", "--audit", str(audit), "--out", str(tmp_path / "out")]
+        )

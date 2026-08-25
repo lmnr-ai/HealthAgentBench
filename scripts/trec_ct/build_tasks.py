@@ -49,15 +49,31 @@ def task_name(year: td.Year, topic_id: int) -> str:
     return f"clinical_trial_matching_{year.year}_task_{topic_id}"
 
 
-def load_audit(path: Path) -> dict[int, list[str]]:
-    """Read an ``audit_eligible.py`` JSONL into ``{topic_id: [gold nct, ...]}``."""
+def load_audit(path: Path, year: td.Year) -> dict[int, list[str]]:
+    """Read an ``audit_eligible.py`` JSONL into ``{topic_id: [gold nct, ...]}``.
+
+    Rows are keyed on ``(year, topic_id)``, not ``topic_id`` alone: topic
+    numbers restart every track (2021 has 1-75, 2022 1-50, 2023 1-40), so an
+    audit file from the wrong year would otherwise hand topic 12's gold from one
+    patient to a completely different patient who also happens to be topic 12.
+    """
     gold: dict[int, list[str]] = {}
+    other_years: set[object] = set()
     for line in path.read_text().splitlines():
         if not line.strip():
             continue
         row = json.loads(line)
+        if row.get("year") != year.year:
+            other_years.add(row.get("year"))
+            continue
         if row.get("clean_eligible"):
             gold.setdefault(row["topic_id"], []).append(row["nct_id"])
+    if other_years:
+        print(
+            f"[build] {path}: ignored rows for year(s) {sorted(map(str, other_years))} "
+            f"— building {year.year} only",
+            file=sys.stderr,
+        )
     return {k: sorted(set(v)) for k, v in gold.items()}
 
 
@@ -181,11 +197,28 @@ def main(argv: list[str] | None = None) -> int:
     qrels = td.load_qrels(year, args.cache_root)
 
     if args.audit:
-        gold_by_topic = load_audit(args.audit)
+        gold_by_topic = load_audit(args.audit, year)
     else:
         gold_by_topic = load_existing_gold(args.gold_from_existing, year)
     if not gold_by_topic:
-        raise SystemExit("[build] no gold found in the requested source")
+        raise SystemExit(
+            f"[build] no {year.year} gold found in the requested source "
+            "(wrong --year for this audit file?)"
+        )
+
+    # Belt and braces on the year check above: gold must be grade-2 in *this*
+    # year's qrels. A gold NCT that isn't tells us the source and --year
+    # disagree, and would otherwise be unioned into the pool as a trial the
+    # verifier demands but TREC never judged eligible for this patient.
+    for topic_id, gold in sorted(gold_by_topic.items()):
+        judged = qrels.get(topic_id, {})
+        stray = [n for n in gold if judged.get(n) != td.GRADE_ELIGIBLE]
+        if stray:
+            raise SystemExit(
+                f"[build] topic {topic_id}: {len(stray)} gold trial(s) are not "
+                f"grade-2 in qrels{year.year} (e.g. {stray[:3]}) — the gold "
+                "source does not match --year"
+            )
 
     from audit_eligible import parse_topic_selector
 
