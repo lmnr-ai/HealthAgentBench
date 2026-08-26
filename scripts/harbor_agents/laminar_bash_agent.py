@@ -62,7 +62,13 @@ from openai import AsyncOpenAI
 # --- trace metadata constants (the schema the trajectory store expects) ------
 SOURCE = "HealthAgentBench"
 DOMAIN = "healthcare"
-HARNESS = "harbor"
+# The harness is the agent scaffold whose behaviour the trajectory reflects --
+# this file's tool loop -- not the thing that starts sandboxes. Harbor only
+# provisions the container and computes the reward; swapping it for another
+# runner would not change a single step of the trajectory, so it belongs in a
+# flat `runner` key instead.
+HARNESS = "custom/laminar-bash-loop"
+RUNNER = "harbor"
 UPSTREAM_REPO = "https://github.com/microsoft/HealthAgentBench"
 FORK_REPO = "https://github.com/lmnr-ai/HealthAgentBench"
 EVAL_CRITERION = "recall_top_50 == 1.0"
@@ -340,7 +346,8 @@ class LaminarBashAgent(BaseAgent):
             "num_steps": self._n_llm_calls,
             # -- general metadata, flattened into the top level --
             "agent": self.name(),
-            "harness_version": importlib.metadata.version("harbor"),
+            "runner": RUNNER,
+            "runner_version": importlib.metadata.version("harbor"),
             "benchmark_repo": FORK_REPO,
             "upstream_repo": UPSTREAM_REPO,
             "eval_criterion": EVAL_CRITERION,

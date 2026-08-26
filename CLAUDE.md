@@ -95,6 +95,11 @@ Non-obvious things that cost time:
 - Azure's OpenAI-compatible `/openai/v1` surface authenticates on an `api-key`
   header, which the OpenAI SDK never sends; the agent adds it when the base URL
   contains `azure`. `gpt-5.6-luna` also needs `max_completion_tokens`.
+- **`harness` is the agent scaffold, not harbor.** It is
+  `custom/laminar-bash-loop` — the loop in this file, which is what actually
+  shaped the trajectory. Harbor provisions the sandbox and computes the reward
+  without influencing a single step, so it lives in the flat `runner` /
+  `runner_version` keys. Consumers group trajectories by `harness`.
 - **`gt_event_identified` is the error flag, not the pass flag** — `true` means
   the answer is *wrong*. The trajectories train a model to spot mistakes and
   inefficiencies, so the event being identified is the mistake. `passed` is

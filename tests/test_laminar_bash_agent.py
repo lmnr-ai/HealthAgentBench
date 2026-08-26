@@ -148,6 +148,21 @@ def test_trace_metadata_has_every_required_key(agent):
     assert metadata["generated"] is True
 
 
+def test_harness_names_the_agent_scaffold_not_the_runner(agent):
+    """`harness` is what shaped the trajectory, which is this file's loop.
+
+    Harbor starts the sandbox and computes the reward; it does not influence a
+    single step, so it goes in a flat `runner` key. Consumers group and compare
+    trajectories by `harness`, so putting the runner there would lump this agent
+    in with every other harbor-launched agent.
+    """
+    metadata = agent._trace_metadata(agent._task_facts(_FakeEnvironment()), {})
+    assert metadata["harness"] == "custom/laminar-bash-loop"
+    assert "harbor" not in metadata["harness"]
+    assert metadata["runner"] == "harbor"
+    assert metadata["runner_version"]
+
+
 def test_gt_event_identified_marks_the_error_not_the_success(agent):
     """True means "something is wrong here", which is the opposite of `passed`.
 
