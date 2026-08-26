@@ -1,0 +1,48 @@
+# The Pi harness -- a real coding agent, running inside the sandbox.
+#
+#   HAB_LMNR_PROJECT_API_KEY=... ANTHROPIC_API_KEY=... \
+#     uv run harbor run -c configs/pi.yaml
+#
+# Same dataset, same record, same Laminar project as configs/laminar-bash.yaml.
+# The only difference that reaches the trajectory store is `harness`, which is
+# the point: trajectories from the two harnesses are comparable.
+#
+# `tasks/` is generated, not committed. Build it first:
+#   uv run python scripts/trec_ct/build_tasks.py --index provenance/tasks.jsonl
+
+job_name: pi
+jobs_dir: jobs
+n_attempts: 1
+n_concurrent_trials: 4
+
+retry:
+  max_retries: 2
+
+environment:
+  type: daytona
+
+datasets:
+  - path: tasks
+
+agents:
+  - import_path: scripts.harbor_agents.pi_agent:LaminarPiAgent
+    # Pi requires `<provider>/<model>`, and the provider decides which API key
+    # it looks for -- `anthropic` => ANTHROPIC_API_KEY, `openai` =>
+    # OPENAI_API_KEY, and so on (harbor/agents/installed/pi.py).
+    model_name: anthropic/claude-sonnet-5
+    # Setup installs nvm, node 22, pi and the Laminar extension in the sandbox;
+    # harbor's 360s default is not enough for that at this concurrency.
+    override_setup_timeout_sec: 900
+    kwargs:
+      lmnr_key_var: HAB_LMNR_PROJECT_API_KEY
+      # The extension that traces pi from inside its own process. Set to ""
+      # to run pi untraced -- which produces no trajectory, so only for
+      # debugging the harness itself.
+      pi_extension: npm:@lmnr-ai/pi-extension
+    # Unlike the bash harness, these DO reach the sandbox: harbor merges
+    # `extra_env` into every exec, which is how pi gets its model key. The
+    # Laminar key is re-exported under its canonical name (plus the host's
+    # span context) by the agent itself -- see LaminarPiAgent._sandbox_laminar_env.
+    env:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      HAB_LMNR_PROJECT_API_KEY: ${HAB_LMNR_PROJECT_API_KEY}

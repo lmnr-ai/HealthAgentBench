@@ -8,19 +8,28 @@ reverse-engineered from the 9 committed tasks and holds exactly:
     gold  == the audited "clean eligible" subset of judged grade-2
     dropped == every grade-2 that was not confirmed by the audit
 
-Committed per task: the topic ID, the shuffled ``trial_ncts.txt`` the bootstrap
-downloads, the sorted ``pool_ncts.txt`` the verifier scores against, and
-``gold.txt``. **Not** committed: the patient description and the raw qrels — the
-bootstrap derives both at run time so we never redistribute TREC data.
+Task dirs are **generated, not committed** — every one of them holds the same
+eleven files rendered from ``templates/`` (six byte-identical across all 110),
+and the only per-task bytes are derived from that task's gold. Harbor requires a
+task dir to be self-contained, so there is nothing to share and no include
+mechanism to reach for; the framework's answer is this adapter, which commits
+the input instead. What is committed is ``provenance/tasks.jsonl`` (the index:
+gold + ``gold_source`` + the hashes of the generated answer files) plus this
+directory. Everything under ``tasks/`` is reproducible from those and is
+gitignored. **Not** committed anywhere: the patient description and the raw
+qrels — the bootstrap derives both at run time so we never redistribute TREC
+data.
 
 Usage::
 
-    # generate from an audit produced by audit_eligible.py
+    # the normal path: rebuild every task from the committed index
+    uv run python scripts/trec_ct/build_tasks.py --index provenance/tasks.jsonl
+
+    # generate from a fresh audit produced by audit_eligible.py
     uv run python scripts/trec_ct/build_tasks.py --year 2022 \
         --audit assets/clinical_trial_matching/audit/2022.jsonl --out tasks
 
-    # regenerate the 9 committed 2021 tasks from their own gold.txt files
-    # (round-trip check: the result must be identical to what is in git)
+    # reuse gold from task dirs already on disk (e.g. after editing templates/)
     uv run python scripts/trec_ct/build_tasks.py --year 2021 \
         --gold-from-existing tasks --out tasks
 """
@@ -104,6 +113,31 @@ def existing_gold_source(task_dir: Path) -> str:
     toml = task_dir / "task.toml"
     match = _GOLD_SOURCE_RE.search(toml.read_text()) if toml.is_file() else None
     return match.group(1) if match else UPSTREAM_GOLD_SOURCE
+
+
+def load_index(path: Path) -> list[dict]:
+    """Read ``provenance/tasks.jsonl`` — the committed dataset index."""
+    return [
+        json.loads(line) for line in path.read_text().splitlines() if line.strip()
+    ]
+
+
+def index_gold(rows: list[dict], year: td.Year) -> tuple[dict[int, list[str]], dict[int, str]]:
+    """Split the index into ``({topic: gold}, {topic: gold_source})`` for one year.
+
+    Like ``load_audit``, this is keyed on ``(year, topic_id)``: topic numbers
+    restart every track, so a row from another year would hand one patient's
+    gold to a different patient with the same topic number.
+    """
+    gold: dict[int, list[str]] = {}
+    source: dict[int, str] = {}
+    for row in rows:
+        if row.get("year") != year.year:
+            continue
+        topic_id = int(row["topic_id"])
+        gold[topic_id] = sorted(set(row["gold"]))
+        source[topic_id] = row.get("gold_source") or UPSTREAM_GOLD_SOURCE
+    return gold, source
 
 
 def load_existing_gold(tasks_dir: Path, year: td.Year) -> dict[int, list[str]]:
@@ -207,31 +241,13 @@ def write_task(
     (tests_dir / "gold.txt").write_text("\n".join(sorted(gold)) + "\n")
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--year", type=int, required=True, choices=sorted(td.YEARS))
-    src = parser.add_mutually_exclusive_group(required=True)
-    src.add_argument("--audit", type=Path, help="JSONL from audit_eligible.py")
-    src.add_argument(
-        "--gold-from-existing",
-        type=Path,
-        help="Reuse gold.txt from already-generated task dirs under this path.",
-    )
-    parser.add_argument("--out", type=Path, default=Path("tasks"))
-    parser.add_argument(
-        "--topics", default="all", help="'all', '1-50', or '6,8,19'."
-    )
-    parser.add_argument("--max-pool", type=int, default=500)
-    parser.add_argument("--min-gold", type=int, default=3)
-    parser.add_argument("--max-gold", type=int, default=10)
-    parser.add_argument("--seed", type=int, default=20260825)
-    parser.add_argument("--cache-root", type=Path, default=None)
-    args = parser.parse_args(argv)
-
-    year = td.get_year(args.year)
+def build_year(year: td.Year, args: argparse.Namespace) -> int:
+    """Write every selected task for one track year. Returns the count."""
     qrels = td.load_qrels(year, args.cache_root)
 
-    if args.audit:
+    if args.index:
+        gold_by_topic, source_of = index_gold(load_index(args.index), year)
+    elif args.audit:
         gold_by_topic = load_audit(args.audit, year)
         source_of = dict.fromkeys(
             gold_by_topic, audit_gold_source(args.audit, year)
@@ -249,11 +265,11 @@ def main(argv: list[str] | None = None) -> int:
     if not gold_by_topic:
         raise SystemExit(
             f"[build] no {year.year} gold found in the requested source "
-            "(wrong --year for this audit file?)"
+            "(wrong --year for this file?)"
         )
 
     # Belt and braces on the year check above: gold must be grade-2 in *this*
-    # year's qrels. A gold NCT that isn't tells us the source and --year
+    # year's qrels. A gold NCT that isn't tells us the source and the year
     # disagree, and would otherwise be unioned into the pool as a trial the
     # verifier demands but TREC never judged eligible for this patient.
     for topic_id, gold in sorted(gold_by_topic.items()):
@@ -263,7 +279,7 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit(
                 f"[build] topic {topic_id}: {len(stray)} gold trial(s) are not "
                 f"grade-2 in qrels{year.year} (e.g. {stray[:3]}) — the gold "
-                "source does not match --year"
+                "source does not match this year"
             )
 
     from audit_eligible import parse_topic_selector
@@ -277,7 +293,8 @@ def main(argv: list[str] | None = None) -> int:
             continue
         if len(gold) > args.max_gold:
             # Deterministically trim; the trimmed ones stay out of the pool, so
-            # they can never become hidden positives.
+            # they can never become hidden positives. A no-op on an index or an
+            # existing tree, whose gold was already trimmed when it was built.
             gold = sorted(
                 random.Random(f"{args.seed}:gold:{topic_id}").sample(
                     gold, args.max_gold
@@ -302,6 +319,51 @@ def main(argv: list[str] | None = None) -> int:
 
     for topic_id, why in skipped:
         print(f"[build] skipped topic {topic_id}: {why}", file=sys.stderr)
+    return written
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--year",
+        type=int,
+        nargs="+",
+        choices=sorted(td.YEARS),
+        help="Track year(s) to build. Defaults to every year in --index.",
+    )
+    src = parser.add_mutually_exclusive_group(required=True)
+    src.add_argument(
+        "--index",
+        type=Path,
+        help="The committed dataset index (provenance/tasks.jsonl).",
+    )
+    src.add_argument("--audit", type=Path, help="JSONL from audit_eligible.py")
+    src.add_argument(
+        "--gold-from-existing",
+        type=Path,
+        help="Reuse gold.txt from already-generated task dirs under this path.",
+    )
+    parser.add_argument("--out", type=Path, default=Path("tasks"))
+    parser.add_argument(
+        "--topics", default="all", help="'all', '1-50', or '6,8,19'."
+    )
+    parser.add_argument("--max-pool", type=int, default=500)
+    parser.add_argument("--min-gold", type=int, default=3)
+    parser.add_argument("--max-gold", type=int, default=10)
+    parser.add_argument("--seed", type=int, default=20260825)
+    parser.add_argument("--cache-root", type=Path, default=None)
+    args = parser.parse_args(argv)
+
+    if args.year:
+        years = sorted(set(args.year))
+    elif args.index:
+        # Building the whole dataset is the common case, and the index already
+        # says which years it covers.
+        years = sorted({row["year"] for row in load_index(args.index)})
+    else:
+        parser.error("--year is required unless --index is given")
+
+    written = sum(build_year(td.get_year(y), args) for y in years)
     print(f"[build] wrote {written} task(s) under {args.out}")
     return 0
 
