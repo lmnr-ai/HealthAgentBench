@@ -88,7 +88,7 @@ harness subclasses `TrajectoryAgent` alongside its Harbor base class and sets
 
 ```bash
 uv run python scripts/trec_ct/build_tasks.py --index provenance/tasks.jsonl
-HAB_LMNR_PROJECT_API_KEY=... ANTHROPIC_API_KEY=... \
+HAB_LMNR_PROJECT_API_KEY=... AZURE_API_KEY=... \
   uv run harbor run -c configs/pi.yaml --job-name sliceN
 HAB_LMNR_PROJECT_API_KEY=... uv run python scripts/harbor_agents/verify_traces.py \
   --minutes 10 --key-var HAB_LMNR_PROJECT_API_KEY
@@ -127,7 +127,36 @@ Non-obvious things that cost time:
 - **`openai` is capped below 3.0 by harbor's litellm pin**, not by us.
 - Azure's OpenAI-compatible `/openai/v1` surface authenticates on an `api-key`
   header, which the OpenAI SDK never sends; the agent adds it when the base URL
-  contains `azure`. `gpt-5.6-luna` also needs `max_completion_tokens`.
+  contains `azure`. (A bearer `Authorization` header works there too, which is
+  what Pi sends.) `gpt-5.6-luna` and `gpt-5.6-terra` also need
+  `max_completion_tokens`.
+- **Pi reaches a model its registry has never heard of through `pi_models`.**
+  Anything OpenAI-, Anthropic- or Google-compatible — every Azure Foundry
+  deployment included — is a provider block in `agents[].kwargs.pi_models`,
+  which is *verbatim* Pi's own `~/.pi/agent/models.json` schema (documented in
+  `docs/models.md` of `@mariozechner/pi-coding-agent`), written into the sandbox
+  at setup. Don't invent a second schema for it: Pi already resolves `apiKey` as
+  a shell command, an env-var name, or a literal, and the config wants the
+  *name* so no key lands in git — `tests/test_configs.py` fails a config whose
+  `apiKey` isn't a variable that `env` also ships. `model_name` must be
+  `<provider>/<model>` and name a provider the block defines; `_validate_pi_models`
+  raises at construction rather than letting the typo surface as a dead trial.
+- **Azure + tools + a reasoning model means `api: openai-responses`.**
+  `/chat/completions` returns 400 `Function tools with reasoning_effort are not
+  supported ... use /v1/responses` for `gpt-5.6-terra`, and Pi always sends a
+  reasoning effort for a model it has marked `reasoning`. Our bash loop is
+  unaffected because it sends no `reasoning_effort` at all.
+- **`pi --version` prints to *stderr*.** `BaseInstalledAgent.setup` reads only
+  `stdout` and swallows the miss, so harbor stamps every Pi trajectory
+  `harness_version: unknown`. `_detect_pi_version` re-runs it with `2>&1`. Pi is
+  installed `@latest`, so this is the only record of which Pi ran.
+- **`model` metadata carries the model, not the route to it.** Pi requires
+  `<provider>/<model>` and the bash loop takes a bare deployment name, so
+  recording `model_name` verbatim filed one Azure deployment under two model
+  names and broke the only cross-harness comparison these trajectories are for.
+  `_model_metadata` splits the prefix into `model_provider`.
+- `harbor run -i <task>` is rejected without `-p tasks` (or `-d`/`-t`), which is
+  how you run a slice: `-p tasks -i clinical_trial_matching_task_6 -n 1`.
 - **`harness` is the agent scaffold, not harbor.** `custom/laminar-bash-loop`
   or `pi` — whatever actually shaped the trajectory. Harbor provisions the
   sandbox and computes the reward without influencing a single step, so it lives
@@ -179,8 +208,10 @@ Non-obvious things that cost time:
   bind mount escapes the task dir and doesn't exist on the VM, so `bootstrap.sh`
   falls through to its network download path. Costs ~1 min/task, nothing else.
 - Harbor's `DaytonaClientManager._cleanup_sync` atexit hook raises
-  `CancelledError` after a successful run. It's noise; the job is already
-  written to `jobs/<name>/result.json`.
+  `CancelledError` after a successful run, and the process can sit there instead
+  of exiting. Both are noise: `finished_at` in `jobs/<name>/result.json` is set
+  before it, so the run is complete and the process is safe to kill. Don't wait
+  on `harbor run` exiting to decide a batch is done — poll that file.
 - **Budget for a retry pass on any batch run: `-n 8` loses ~12% of trials to
   `RuntimeError: docker compose up failed`** while the DinD sandbox brings the
   two-service compose up. It is pure infrastructure flake — the trials die in
@@ -210,7 +241,9 @@ Non-obvious things that cost time:
 
 - **No credentials are needed** to build or run the tasks — TREC topics, qrels
   and the ClinicalTrials.gov snapshot are all public. `ANTHROPIC_API_KEY` is only
-  needed to run `audit_eligible.py` (and Pi, if the model is Anthropic's);
+  needed to run `audit_eligible.py`; `AZURE_API_KEY` to run either harness
+  against the shipped configs' Azure Foundry deployment (Pi resolves it inside
+  the sandbox, which is why `configs/pi.yaml` lists it under `agents[].env`);
   `HAB_LMNR_PROJECT_API_KEY` only to trace runs.
 - **`tasks/` will not exist in a fresh checkout.** Build it before running
   anything that reads a task dir, including the agent tests' fixture path:

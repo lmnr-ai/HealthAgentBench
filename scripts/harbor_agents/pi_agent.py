@@ -31,11 +31,14 @@ the same record with a different ``harness``.
 
 Usage::
 
-    HAB_LMNR_PROJECT_API_KEY=... ANTHROPIC_API_KEY=... \
+    HAB_LMNR_PROJECT_API_KEY=... AZURE_API_KEY=... \
         uv run harbor run -c configs/pi.yaml
 
 ``model_name`` must be ``<provider>/<model>`` -- that is Pi's own requirement,
-not ours.
+not ours. The provider does not have to be one Pi ships: ``pi_models`` in the
+job config is written to ``~/.pi/agent/models.json`` in the sandbox, which is
+how a run reaches an Azure Foundry deployment or any other OpenAI-compatible
+endpoint.
 """
 
 from __future__ import annotations
@@ -43,6 +46,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import shlex
 from pathlib import Path
 from typing import Any
@@ -56,6 +60,15 @@ from .trajectory import TrajectoryAgent
 
 #: The extension that makes a Pi run show up in Laminar at all.
 DEFAULT_EXTENSION = "npm:@lmnr-ai/pi-extension"
+
+#: Where Pi reads custom provider/model definitions from, relative to the
+#: sandbox user's home. See `pi_models` on the agent below.
+PI_MODELS_PATH = ".pi/agent/models.json"
+
+#: Harbor's own version command, plus the redirect that makes it usable: `pi
+#: --version` prints to *stderr*. See `_detect_pi_version`.
+PI_VERSION_COMMAND = ". ~/.nvm/nvm.sh; pi --version 2>&1"
+_PI_VERSION_RE = re.compile(r"\d+\.\d+\.\d+[\w.+-]*")
 
 #: Aggregates Pi's JSON event stream *in the sandbox*. Pi's ``--mode json``
 #: output carries every message in full -- megabytes on a long run -- and it is
@@ -128,12 +141,46 @@ class LaminarPiAgent(TrajectoryAgent, Pi):
         model_name: str | None = None,
         logger: logging.Logger | None = None,
         pi_extension: str = DEFAULT_EXTENSION,
+        pi_models: dict[str, Any] | None = None,
         **kwargs,
     ):
         super().__init__(
             logs_dir=logs_dir, model_name=model_name, logger=logger, **kwargs
         )
         self.pi_extension = pi_extension
+        # Verbatim `~/.pi/agent/models.json`, not a schema of our own: Pi
+        # already has one, it is documented, and inventing a second one here
+        # would mean re-implementing its `apiKey` / `headers` resolution.
+        self.pi_models = pi_models or {}
+        self._validate_pi_models()
+
+    def _validate_pi_models(self) -> None:
+        """Fail at construction, not 15 minutes into a batch.
+
+        ``--provider X`` for an X Pi has never heard of is a run-time error
+        inside the sandbox, which surfaces as a whole trial timing out or
+        exiting with an unhelpful log. The provider block and the model name
+        come from the same config file, so a mismatch between them is a typo we
+        can catch before the first sandbox starts.
+        """
+        if not self.pi_models or not self.model_name:
+            return
+        providers = self.pi_models.get("providers") or {}
+        provider, _, model_id = self.model_name.partition("/")
+        if provider not in providers:
+            raise ValueError(
+                f"model_name names provider {provider!r}, which pi_models does "
+                f"not define (has: {sorted(providers)})"
+            )
+        models = providers[provider].get("models")
+        # A provider block with no `models` overrides the endpoint of a
+        # built-in provider and keeps its model list, so there is nothing to
+        # check against.
+        if models is not None and model_id not in {m.get("id") for m in models}:
+            raise ValueError(
+                f"pi_models defines provider {provider!r} but not model "
+                f"{model_id!r} (has: {sorted(m.get('id') for m in models)})"
+            )
 
     @staticmethod
     def name() -> str:
@@ -143,8 +190,10 @@ class LaminarPiAgent(TrajectoryAgent, Pi):
         return "laminar-pi"
 
     async def setup(self, environment: BaseEnvironment) -> None:
-        """Install Pi (upstream), then the Laminar extension next to it."""
+        """Install Pi (upstream), its model config, then the Laminar extension."""
         await super().setup(environment)
+        await self._detect_pi_version(environment)
+        await self._write_pi_models(environment)
         if not self.pi_extension:
             return
         await self.exec_as_agent(
@@ -154,6 +203,67 @@ class LaminarPiAgent(TrajectoryAgent, Pi):
             ),
         )
         self.logger.info("installed pi extension %s", self.pi_extension)
+
+    async def _detect_pi_version(self, environment: BaseEnvironment) -> None:
+        """Record which Pi actually ran.
+
+        Harbor detects this too and always comes up empty: ``pi --version``
+        prints the version to **stderr**, and
+        ``BaseInstalledAgent.setup`` only looks at ``stdout`` -- then swallows
+        the miss, so every pi trajectory was stamped ``harness_version:
+        unknown``. Pi is installed ``@latest``, so the version is genuinely not
+        knowable in advance, and a trajectory whose harness has no version
+        cannot be compared with next month's batch. Same command, with the
+        redirect it needed.
+
+        Best-effort by design: a missing version is a worse record, not a
+        failed trial.
+        """
+        if self._version:
+            return
+        try:
+            result = await self.exec_as_agent(environment, command=PI_VERSION_COMMAND)
+        except Exception as exc:  # noqa: BLE001 - see docstring
+            self.logger.warning("could not read pi's version: %r", exc)
+            return
+        # The redirect puts it in stdout; keep stderr as a fallback in case a
+        # future pi moves it back.
+        output = (result.stdout or "") or (result.stderr or "")
+        # Last match wins: nvm.sh is silent, but anything it did print would
+        # come before pi's own output.
+        for line in reversed(output.splitlines()):
+            match = _PI_VERSION_RE.search(line)
+            if match:
+                self._version = match.group(0)
+                self.logger.info("pi version %s", self._version)
+                return
+        self.logger.warning("no version in `pi --version` output: %r", output[:200])
+
+    async def _write_pi_models(self, environment: BaseEnvironment) -> None:
+        """Hand Pi the provider block from the job config.
+
+        This is how a run reaches a model Pi's built-in registry has never
+        heard of -- anything behind an OpenAI-, Anthropic- or Google-compatible
+        endpoint, which includes every Azure Foundry deployment. Only the
+        *name* of the key variable travels in here (Pi resolves `apiKey` from
+        the sandbox environment), so the config file still holds no secret and
+        the key itself arrives the same way the model key always has: through
+        `extra_env`.
+        """
+        if not self.pi_models:
+            return
+        payload = json.dumps(self.pi_models, indent=2, sort_keys=True)
+        # Heredoc, quoted: JSON is newline-safe and cannot contain the
+        # delimiter line, so nothing here needs escaping.
+        await self.exec_as_agent(
+            environment,
+            command=(
+                f"mkdir -p $(dirname ~/{PI_MODELS_PATH}) && "
+                f"cat > ~/{PI_MODELS_PATH} <<'HAB_EOF'\n{payload}\nHAB_EOF"
+            ),
+        )
+        providers = sorted(self.pi_models.get("providers") or {})
+        self.logger.info("wrote ~/%s (providers: %s)", PI_MODELS_PATH, providers)
 
     def _sandbox_laminar_env(self) -> dict[str, str]:
         """What the extension needs, resolved on the host.

@@ -108,6 +108,29 @@ def agent(tmp_path) -> LaminarPiAgent:
     )
 
 
+PI_MODELS = {
+    "providers": {
+        "azure-foundry": {
+            "baseUrl": "https://example.invalid/openai/v1",
+            "api": "openai-responses",
+            "apiKey": "AZURE_API_KEY",
+            "authHeader": True,
+            "models": [{"id": "gpt-5.6-terra", "reasoning": True}],
+        }
+    }
+}
+
+
+def _pi_agent(tmp_path, **kwargs) -> LaminarPiAgent:
+    return LaminarPiAgent(
+        logs_dir=tmp_path,
+        logger=logging.getLogger("test"),
+        lmnr_key_var="HAB_LMNR_PROJECT_API_KEY",
+        extra_env={"HAB_LMNR_PROJECT_API_KEY": "test-key"},
+        **kwargs,
+    )
+
+
 def _assistant(usage: dict, tool_calls: int = 0, stop: str = "stop") -> str:
     return json.dumps(
         {
@@ -209,7 +232,10 @@ def test_the_record_matches_the_bash_harness_apart_from_harness(agent, task_dir)
     assert metadata["agent"] == "laminar-pi"
     assert metadata["runner"] == "harbor"
     assert metadata["source"] == "HealthAgentBench"
-    assert metadata["model"] == "anthropic/claude-sonnet-5"
+    # `model` is the model, not the route to it -- the bash harness names the
+    # same deployment without a provider prefix, and the two must group together.
+    assert metadata["model"] == "claude-sonnet-5"
+    assert metadata["model_provider"] == "anthropic"
     # Same polarity as everywhere else: true means the answer is wrong.
     assert metadata["gt_event_identified"] is True
     assert metadata["passed"] is False
@@ -286,6 +312,98 @@ async def test_a_scoring_failure_does_not_escape_finalize(agent, task_dir, lamin
 
     assert "evaluator exploded" in laminar.metadata["scoring_failed"]
     assert "gt_event_identified" not in laminar.metadata
+
+
+@pytest.mark.asyncio
+async def test_a_custom_provider_is_written_where_pi_reads_it(tmp_path):
+    """The whole point of `pi_models`: reach a model pi's registry doesn't have."""
+    agent = _pi_agent(
+        tmp_path, model_name="azure-foundry/gpt-5.6-terra", pi_models=PI_MODELS
+    )
+    commands: list[str] = []
+
+    async def fake_exec(environment, command, **kwargs):
+        commands.append(command)
+
+    agent.exec_as_agent = fake_exec
+    await agent._write_pi_models(object())
+
+    assert len(commands) == 1
+    assert ".pi/agent/models.json" in commands[0]
+    written = commands[0].split("<<'HAB_EOF'\n", 1)[1].rsplit("\nHAB_EOF", 1)[0]
+    assert json.loads(written) == PI_MODELS
+    # The key travels as a variable *name* for pi to resolve in the sandbox --
+    # a config that pasted the key itself would put it in git.
+    assert json.loads(written)["providers"]["azure-foundry"]["apiKey"].isupper()
+
+
+def test_a_provider_pi_has_never_heard_of_fails_at_construction(tmp_path):
+    """`--provider nope` fails inside the sandbox, which reads as a dead trial."""
+    with pytest.raises(ValueError, match="does not define"):
+        _pi_agent(tmp_path, model_name="openai/gpt-5.6-terra", pi_models=PI_MODELS)
+
+
+def test_a_model_the_provider_block_does_not_define_fails_at_construction(tmp_path):
+    with pytest.raises(ValueError, match="not model"):
+        _pi_agent(
+            tmp_path, model_name="azure-foundry/gpt-5.6-luna", pi_models=PI_MODELS
+        )
+
+
+def test_an_endpoint_only_override_keeps_the_builtin_model_list(tmp_path):
+    """A provider block with no `models` re-points a built-in provider."""
+    agent = _pi_agent(
+        tmp_path,
+        model_name="anthropic/claude-sonnet-5",
+        pi_models={"providers": {"anthropic": {"baseUrl": "https://proxy.invalid"}}},
+    )
+    assert agent.pi_models["providers"]["anthropic"]["baseUrl"]
+
+
+@pytest.mark.asyncio
+async def test_the_pi_version_is_read_back_off_the_sandbox(tmp_path, task_dir):
+    """Pi installs `@latest`, so the version is only knowable after the install."""
+    agent = _pi_agent(tmp_path, model_name="azure-foundry/gpt-5.6-terra")
+
+    async def fake_exec(environment, command, **kwargs):
+        # `pi --version` prints to stderr; without the redirect the output is
+        # empty, which is exactly what harbor's own detection sees.
+        assert "pi --version 2>&1" in command
+        return _ExecResult(stdout="0.73.1\n")
+
+    agent.exec_as_agent = fake_exec
+    await agent._detect_pi_version(object())
+
+    metadata = agent._trace_metadata(agent._task_facts(_FakeEnvironment(task_dir)), {})
+    assert metadata["harness_version"] == "0.73.1"
+
+
+@pytest.mark.asyncio
+async def test_a_version_left_on_stderr_is_still_read(tmp_path):
+    """Where pi prints it is pi's business; a future release may move it back."""
+    agent = _pi_agent(tmp_path, model_name="azure-foundry/gpt-5.6-terra")
+
+    async def fake_exec(environment, command, **kwargs):
+        return _ExecResult(stdout="", stderr="0.74.0\n")
+
+    agent.exec_as_agent = fake_exec
+    await agent._detect_pi_version(object())
+
+    assert agent.version() == "0.74.0"
+
+
+@pytest.mark.asyncio
+async def test_a_version_we_cannot_read_costs_the_record_not_the_trial(tmp_path):
+    """Best-effort: harbor's own detection already fails silently on daytona."""
+    agent = _pi_agent(tmp_path, model_name="azure-foundry/gpt-5.6-terra")
+
+    async def fake_exec(environment, command, **kwargs):
+        raise RuntimeError("command failed")
+
+    agent.exec_as_agent = fake_exec
+    await agent._detect_pi_version(object())
+
+    assert agent.version() is None
 
 
 def test_the_agent_name_is_not_harbor_stock_pi(agent):

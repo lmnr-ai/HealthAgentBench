@@ -1,9 +1,9 @@
 # The Pi harness -- a real coding agent, running inside the sandbox.
 #
-#   HAB_LMNR_PROJECT_API_KEY=... ANTHROPIC_API_KEY=... \
+#   HAB_LMNR_PROJECT_API_KEY=... AZURE_API_KEY=... \
 #     uv run harbor run -c configs/pi.yaml
 #
-# Same dataset, same record, same Laminar project as configs/laminar-bash.yaml.
+# Same dataset, same model and same Laminar project as configs/laminar-bash.yaml.
 # The only difference that reaches the trajectory store is `harness`, which is
 # the point: trajectories from the two harnesses are comparable.
 #
@@ -26,10 +26,10 @@ datasets:
 
 agents:
   - import_path: scripts.harbor_agents.pi_agent:LaminarPiAgent
-    # Pi requires `<provider>/<model>`, and the provider decides which API key
-    # it looks for -- `anthropic` => ANTHROPIC_API_KEY, `openai` =>
-    # OPENAI_API_KEY, and so on (harbor/agents/installed/pi.py).
-    model_name: anthropic/claude-sonnet-5
+    # Pi requires `<provider>/<model>`. `azure-foundry` is not one of its
+    # built-in providers -- it is defined below in `pi_models`, which the agent
+    # writes to ~/.pi/agent/models.json in the sandbox.
+    model_name: azure-foundry/gpt-5.6-terra
     # Setup installs nvm, node 22, pi and the Laminar extension in the sandbox;
     # harbor's 360s default is not enough for that at this concurrency.
     override_setup_timeout_sec: 900
@@ -39,10 +39,33 @@ agents:
       # to run pi untraced -- which produces no trajectory, so only for
       # debugging the harness itself.
       pi_extension: npm:@lmnr-ai/pi-extension
+      # Verbatim pi `models.json`. `apiKey` is the *name* of an environment
+      # variable, resolved by pi inside the sandbox, so no secret lives here.
+      pi_models:
+        providers:
+          azure-foundry:
+            baseUrl: https://laminar-resource.services.ai.azure.com/openai/v1
+            # NOT openai-completions: Azure rejects function tools combined
+            # with reasoning_effort on /chat/completions for this model
+            # ("To use function tools, use /v1/responses"), and pi always
+            # sends a reasoning effort for a model marked `reasoning`.
+            api: openai-responses
+            apiKey: AZURE_API_KEY
+            # Azure Foundry's OpenAI-compatible surface accepts the standard
+            # bearer header, so no custom `api-key` header is needed here --
+            # unlike the OpenAI SDK path the bash harness takes.
+            authHeader: true
+            models:
+              - id: gpt-5.6-terra
+                name: gpt-5.6-terra
+                reasoning: true
+                input: [text]
+                contextWindow: 400000
+                maxTokens: 128000
     # Unlike the bash harness, these DO reach the sandbox: harbor merges
     # `extra_env` into every exec, which is how pi gets its model key. The
     # Laminar key is re-exported under its canonical name (plus the host's
     # span context) by the agent itself -- see LaminarPiAgent._sandbox_laminar_env.
     env:
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      AZURE_API_KEY: ${AZURE_API_KEY}
       HAB_LMNR_PROJECT_API_KEY: ${HAB_LMNR_PROJECT_API_KEY}
