@@ -1,0 +1,30 @@
+version = "1.0"
+
+[metadata]
+benchmark = "clinical_trial_matching"
+mode = "etl-task"
+task_id = "clinical_trial_matching_2022_task_3"
+submission_path = "/workspace/submission/eligible_trials.txt"
+# Who decided which TREC grade-2 trials became gold. "microsoft-hand-audit" =
+# upstream's human audit, shipped with the original 9 tasks. "llm-audit:<model>"
+# = scripts/trec_ct/audit_eligible.py. See provenance/README.md.
+gold_source = "llm-audit:claude-sonnet-5"
+
+[verifier]
+timeout_sec = 300.0
+
+[agent]
+timeout_sec = 3600.0
+
+[environment]
+build_timeout_sec = 1800.0
+allow_internet = true
+cpus = 2
+memory_mb = 2048
+storage_mb = 4096
+gpus = 0
+mcp_servers = []
+
+[verifier.env]
+
+[solution.env]

@@ -1,8 +1,8 @@
 # `clinical_trial_matching_task_27`
 
-This is one of 9 `clinical_trial_matching_*` tasks in the **Clinical Trial Matching** category of [HealthAgentBench](../../README.md).
+This is one of the `clinical_trial_matching_*` tasks in the **Clinical Trial Matching** category of [HealthAgentBench](../../README.md).
 
-Given one patient admission note plus a per-topic candidate pool of clinical-trial documents, identify every trial the patient is eligible for and write one NCT per line in descending order of confidence (TREC Clinical Trials 2021).
+Given one patient free-text admission note plus a per-topic candidate pool of clinical-trial documents, identify every trial the patient is eligible for and write one NCT per line in descending order of confidence (TREC Clinical Trials 2021, topic 27).
 
 **Success criteria:** recall@top50 == 1.0.
 
@@ -35,6 +35,8 @@ uv run harbor run \
 
 ## Data & references
 
-The candidate pool for each topic is a hand-audited subset: the clean-eligible trials (gold) plus non-eligible distractors.
+The candidate pool for each topic is an audited subset: the clean-eligible trials (gold) plus non-eligible distractors. Pool size 451, gold size 6.
+
+**Gold provenance: `microsoft-hand-audit`.** Every gold trial was graded eligible (grade 2) by TREC's human assessors first; the audit step is a second, stricter filter over those. See [`provenance/`](../../provenance/README.md).
 
 - TREC Clinical Trials 2021: <https://www.trec-cds.org/2021.html>

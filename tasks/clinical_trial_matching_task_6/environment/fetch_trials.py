@@ -42,8 +42,7 @@ import sys
 import time
 from pathlib import Path
 
-from remotezip import RemoteZip, RemoteIOError
-
+from remotezip import RemoteIOError, RemoteZip
 
 # 5 zip parts hosting the April 27, 2021 ClinicalTrials.gov snapshot.
 DEFAULT_ZIP_URLS = [

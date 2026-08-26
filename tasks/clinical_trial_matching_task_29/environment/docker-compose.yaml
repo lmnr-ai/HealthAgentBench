@@ -20,7 +20,7 @@ services:
       # names the TREC source + qrels answer-key filename — provenance/answer
       # hints that must stay out of the agent's reach.
       - ./bootstrap.sh:/bootstrap.sh:ro
-      - ../../../assets/clinical_trial_matching/assets/raw_cache:/data/_cache:rw
+      - ../../../assets/clinical_trial_matching/assets/raw_cache_2021-04-27:/data/_cache:rw
       # bootstrap writes the runtime-derived qrels.txt here; the host tests/
       # dir is what Harbor mounts at /tests during scoring. main never mounts it.
       - ../tests:/tests:rw
