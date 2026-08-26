@@ -1,0 +1,54 @@
+# The bash tool-loop harness -- our own loop, driven from the host.
+#
+#   HAB_LMNR_PROJECT_API_KEY=... AZURE_API_KEY=... \
+#     uv run harbor run -c configs/laminar-bash.yaml
+#
+# Everything that shapes a trajectory is pinned here rather than in a shell
+# history entry: which harness took the steps, which model, which Laminar
+# project. Swap harness by swapping the config -- see configs/pi.yaml, which
+# differs only in the agent block.
+#
+# `tasks/` is generated, not committed. Build it first:
+#   uv run python scripts/trec_ct/build_tasks.py --index provenance/tasks.jsonl
+
+job_name: laminar-bash
+jobs_dir: jobs
+n_attempts: 1
+
+# 4, not 8. At -n 8 roughly one trial in eight dies in environment setup with
+# `docker compose up failed` while the DinD sandbox brings the two-service
+# compose up. See CLAUDE.md, "Generating trajectories".
+n_concurrent_trials: 4
+
+retry:
+  # Covers that same setup flake without a manual second pass. Timeouts and
+  # reward-file failures are excluded by harbor's default exclude_exceptions,
+  # so a genuinely failed trajectory is still recorded as failed.
+  max_retries: 2
+
+environment:
+  type: daytona
+
+datasets:
+  - path: tasks
+    # Narrow a run with e.g.
+    #   task_names: ["clinical_trial_matching_2022_*"]
+
+agents:
+  - import_path: scripts.harbor_agents.laminar_bash_agent:LaminarBashAgent
+    model_name: gpt-5.6-terra
+    kwargs:
+      # Azure's OpenAI-compatible surface. Drop both for api.openai.com.
+      base_url: https://laminar-resource.services.ai.azure.com/openai/v1
+      api_key_var: AZURE_API_KEY
+      # A run-specific name on purpose: `LMNR_PROJECT_API_KEY` is generic
+      # enough that an ambient one would send the whole batch into somebody
+      # else's project, silently.
+      lmnr_key_var: HAB_LMNR_PROJECT_API_KEY
+      max_steps: 120
+    # Resolved from the host environment by harbor; missing vars fail the run
+    # up front rather than mid-batch. The loop runs on the host, so none of
+    # this reaches the sandbox.
+    env:
+      AZURE_API_KEY: ${AZURE_API_KEY}
+      HAB_LMNR_PROJECT_API_KEY: ${HAB_LMNR_PROJECT_API_KEY}

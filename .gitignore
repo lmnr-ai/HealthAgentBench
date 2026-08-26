@@ -16,13 +16,19 @@ results/
 # temporary files
 .tmp/
 
-# clinical_trial_matching: the patient note (topic.txt) and relevance-judgment
-# answer key (qrels.txt) are the TREC benchmark data. They are NOT committed —
-# the bootstrap downloads topics<YEAR>.xml / qrels<YEAR>.txt at run time and
-# extract_task_inputs.py writes them (qrels.txt into tests/ via a host
-# bind-mount; topic.txt only into the in-container workspace volume).
-tasks/clinical_trial_matching_*/tests/qrels.txt
-tasks/clinical_trial_matching_*/environment/workspace/topic.txt
+# Harbor task dirs are GENERATED, not authored. Each is 15 files, of which 6
+# (Dockerfile, fetch_trials.py, harbor_evaluator.py, test.sh, verify.py,
+# extract_task_inputs.py) are byte-identical across all 110 tasks and the rest
+# are templated from the same sources — 1,650 files in git for one dataset.
+# Harbor has no shared-file primitive (a task dir must be self-contained), so
+# the fix is its adapter pattern: commit the input, generate the output.
+# Rebuild with:
+#     uv run python scripts/trec_ct/build_tasks.py --index provenance/tasks.jsonl
+# The committed inputs are provenance/tasks.jsonl + scripts/trec_ct/.
+# This also keeps the TREC benchmark data out of git for free: the patient note
+# (topic.txt) and the relevance-judgment answer key (qrels.txt) are written into
+# a task dir at run time by the bootstrap and must never be committed.
+tasks/
 
 # Downloaded TREC artifacts + per-NCT XML cache used by scripts/trec_ct and
 # mounted into the task bootstrap. Large and fully re-derivable; never commit.

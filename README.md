@@ -29,6 +29,10 @@ no generator. The other 101 were built with `scripts/trec_ct/` — see
 [docs/TREC_CT_ENRICHMENT.md](docs/TREC_CT_ENRICHMENT.md). The original 9 keep
 Microsoft's hand-audited gold and are byte-for-byte unchanged.
 
+Upstream also committed each task directory. This fork generates them instead
+(see [Build the tasks](#build-the-tasks)) and adds a configurable trajectory
+harness in `scripts/harbor_agents/`.
+
 Removed in this fork: `xray_report_correction`, `ct_abnormality`,
 `ehr_data_quality`, `ehr_event_modelling`, `ehr_to_meds_etl`,
 `tumor_area_selection_pathology`, the upstream leaderboard site (`website/`,
@@ -62,9 +66,39 @@ uv sync --all-extras     # Python >= 3.12
 No `.env` is needed to *run* tasks. `.env.example` documents the (optional) keys
 used for agent auth, Laminar tracing, and task *generation*.
 
+### Build the tasks
+
+`tasks/` is **generated, not committed** — 110 near-identical Harbor task
+directories are not worth 1,650 files in git. What is committed is the input
+they are built from, `provenance/tasks.jsonl`, plus the templates:
+
+```bash
+uv run python scripts/trec_ct/build_tasks.py --index provenance/tasks.jsonl
+```
+
+That is offline apart from the trial-XML fetch, deterministic, and reproduces
+every task byte-for-byte (`tests/test_trec_ct_roundtrip.py` asserts it).
+
 ## Usage
 
-Run the whole suite:
+Which harness runs the benchmark is a config file, not a command line. Two ship:
+
+| Config | Harness | Where the agent runs |
+| --- | --- | --- |
+| `configs/laminar-bash.yaml` | `custom/laminar-bash-loop` | A bash tool-loop we drive from the host |
+| `configs/pi.yaml` | `pi` | Pi (`@mariozechner/pi-coding-agent`) inside the sandbox, traced by `@lmnr-ai/pi-extension` |
+
+```bash
+HAB_LMNR_PROJECT_API_KEY=... ANTHROPIC_API_KEY=... \
+  uv run harbor run -c configs/pi.yaml
+```
+
+Both write the same trajectory record to Laminar; only the `harness` metadata
+key differs, so trajectories from the two are directly comparable. Copy a config
+to add a model or a harness — see `scripts/harbor_agents/trajectory.py` for what
+a new harness has to implement (in practice: a class, one constant).
+
+Any stock Harbor agent works too, if you only want the score:
 
 ```bash
 uv run harbor run \
@@ -77,26 +111,16 @@ uv run harbor run \
   --jobs-dir <output directory>
 ```
 
-Run a single task:
-
-```bash
-uv run harbor run \
-  --path tasks/clinical_trial_matching_task_19 \
-  --agent claude-code \
-  --model claude-opus-4-8 \
-  --agent-kwarg disallowed_tools="WebSearch WebFetch" \
-  --n-attempts 1 --n-concurrent 1
-```
-
 Notes:
 
 1. The first run downloads the per-topic trial XMLs into
    `assets/clinical_trial_matching/assets/raw_cache/` (gitignored) via HTTP
    range requests against the upstream zip snapshot. Subsequent runs are
    offline-fast. Budget ~1–2 GB for the full 9-task cache.
-2. Gold labels for these 9 tasks *are* committed (`tests/gold.txt`). The patient
-   note (`topic.txt`) and the raw qrels are **not** — the bootstrap derives them
-   at run time so we don't redistribute TREC data.
+2. Gold labels *are* committed, in `provenance/tasks.jsonl` and in each
+   generated `tests/gold.txt`. The patient note (`topic.txt`) and the raw qrels
+   are **not** — the bootstrap derives them at run time so we don't
+   redistribute TREC data.
 3. Keep web search / web fetch disabled so the agent can't look up the answers.
 
 ## Growing the benchmark
@@ -121,6 +145,9 @@ uv run python scripts/trec_ct/audit_eligible.py --year 2022 --topics 1-50 \
 # 2. Emit Harbor task directories from the audit
 uv run python scripts/trec_ct/build_tasks.py --year 2022 \
   --audit assets/clinical_trial_matching/audit/2022.jsonl --out tasks
+
+# 3. Fold the new tasks into the committed index, so others can rebuild them
+uv run python scripts/trec_ct/export_provenance.py --years 2021 2022
 ```
 
 ## Harbor background

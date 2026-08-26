@@ -61,17 +61,18 @@ guarantees the pool contains no hidden positive, which is what makes
 `recall@top50 == 1.0` a fair pass criterion. Any generator that keeps them would
 silently make every task unpassable.
 
-`scripts/trec_ct/build_tasks.py` implements this recipe, and regenerating the 9
-committed tasks from their own `gold.txt` reproduces `pool_ncts.txt` and
-`gold.txt` **byte-for-byte** for all 9 topics:
+`scripts/trec_ct/build_tasks.py` implements this recipe, and regenerating from
+the committed index reproduces `pool_ncts.txt` and `gold.txt` **byte-for-byte**
+for all 110 tasks — which is why `tasks/` doesn't need to be in git at all:
 
 ```bash
-uv run python scripts/trec_ct/build_tasks.py --year 2021 \
-    --gold-from-existing tasks --out /tmp/roundtrip
-diff /tmp/roundtrip/<task>/tests/pool_ncts.txt tasks/<task>/tests/pool_ncts.txt   # empty
+uv run python scripts/trec_ct/build_tasks.py --index provenance/tasks.jsonl \
+    --out /tmp/roundtrip
+diff -r --brief /tmp/roundtrip tasks    # empty
 ```
 
-`tests/test_trec_ct_roundtrip.py` locks that in as a regression test.
+`tests/test_trec_ct_roundtrip.py` locks that in as a regression test, against
+the `gold_sha256` / `pool_sha256` recorded per task in the index.
 
 So the *only* piece that isn't mechanical is choosing which grade-2 trials
 become gold. Section 4 covers that.
@@ -303,14 +304,22 @@ uv run python scripts/trec_ct/audit_eligible.py --year 2022 --topics all --dry-r
 uv run python scripts/trec_ct/build_tasks.py --year 2022 \
     --audit assets/clinical_trial_matching/audit/2022.jsonl --out tasks
 
-# 3. Verify the recipe still round-trips against the committed 2021 tasks.
+# 3. Fold them into the committed index. `tasks/` is gitignored, so this is the
+#    step that actually persists the new tasks.
+uv run python scripts/trec_ct/export_provenance.py --years 2021 2022
+
+# 4. Verify the recipe still round-trips: rebuild everything from the index and
+#    check it against the hashes recorded there.
 uv run pytest tests/test_trec_ct_roundtrip.py
 
-# 4. Run.
-uv run harbor run --path tasks --include-task-name "clinical_trial_matching_2022_*" \
-    --agent claude-code --model claude-opus-5 \
-    --agent-kwarg disallowed_tools="WebSearch WebFetch" \
-    --n-attempts 1 --n-concurrent 5
+# 5. Run, choosing a harness by config.
+HAB_LMNR_PROJECT_API_KEY=... ANTHROPIC_API_KEY=... uv run harbor run -c configs/pi.yaml
+```
+
+Anyone starting from a clean checkout skips 1–3 and just builds from the index:
+
+```bash
+uv run python scripts/trec_ct/build_tasks.py --index provenance/tasks.jsonl
 ```
 
 Topics that yield fewer than `--min-gold` (default 3) clean-eligible trials are
@@ -326,10 +335,11 @@ naming so the existing 9 round-trip; 2022/2023 tasks are named
 
 ## 6. Verification performed
 
-- Round-trip: regenerating all 110 committed tasks (67 × 2021, 43 × 2022)
-  reproduces `pool_ncts.txt` and `gold.txt` byte-for-byte, and `trial_ncts.txt`
-  as an identical set (ordering is a deliberate shuffle). The 9 upstream tasks
-  are the load-bearing ones here — their gold is Microsoft's, not ours.
+- Round-trip: regenerating all 110 tasks (67 × 2021, 43 × 2022) from
+  `provenance/tasks.jsonl` reproduces every file byte-for-byte —
+  `diff -r --brief` against the previously committed tree is empty. That is what
+  made it safe to stop committing `tasks/`. The 9 upstream tasks are the
+  load-bearing ones here — their gold is Microsoft's, not ours.
 - No pool in any of the 110 tasks contains an un-audited grade-2 trial, so
   `recall@top50 == 1.0` is reachable in every one of them.
 - `extract_task_inputs.py` renders topic 1 correctly for all three years,

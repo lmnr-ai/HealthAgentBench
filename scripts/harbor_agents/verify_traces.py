@@ -2,8 +2,15 @@
 """Read back what actually landed in Laminar for a run.
 
 Checks the two things that are easy to get wrong and invisible locally: that
-the span tree is the flat ``root -> [LLM|TOOL]`` shape we intend, and that the
-required trace-metadata keys are all present with the right types.
+the span tree has the shape the harness that produced it is supposed to
+produce, and that the required trace-metadata keys are all present.
+
+Shape is per-harness, not universal. A host-side loop
+(``custom/laminar-bash-loop``) puts its LLM and tool spans directly under the
+root, so the tree is 2 deep. An in-sandbox agent (``pi``) contributes its own
+run span under our root and hangs its steps off *that*, so the tree is 3 deep.
+Both are correct; what would be wrong is either one drifting from its expected
+depth, because that means spans are being parented somewhere we didn't intend.
 
 Usage::
 
@@ -31,6 +38,35 @@ REQUIRED_KEYS = (
     "model",
     "num_steps",
 )
+
+#: How deep each harness's span tree is allowed to go. Depth 1 is the root.
+#: A harness that isn't listed gets its depth reported but not enforced -- a new
+#: harness should land here once its intended shape is known.
+EXPECTED_MAX_DEPTH = {
+    "custom/laminar-bash-loop": 2,
+    "pi": 3,
+}
+
+
+def span_depths(rows: list[dict]) -> dict[str, int]:
+    """``{span_id: depth}``, where a span whose parent is outside the trace is 1."""
+    by_id = {row["span_id"]: row for row in rows}
+    depths: dict[str, int] = {}
+
+    def depth_of(span: dict) -> int:
+        span_id = span["span_id"]
+        if span_id not in depths:
+            parent = by_id.get(span.get("parent_span_id") or "")
+            # Set before recursing: a malformed tree with a cycle must not
+            # blow the stack of a script whose whole job is diagnostics.
+            depths[span_id] = 1
+            if parent is not None:
+                depths[span_id] = depth_of(parent) + 1
+        return depths[span_id]
+
+    for row in rows:
+        depth_of(row)
+    return depths
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -76,8 +112,9 @@ def main(argv: list[str] | None = None) -> int:
     for trace_id, rows in by_trace.items():
         ids = {r["span_id"] for r in rows}
         roots = [r for r in rows if not r["parent_span_id"] or r["parent_span_id"] not in ids]
-        depth_2 = [r for r in rows if r["parent_span_id"] in {x["span_id"] for x in roots}]
-        deeper = [r for r in rows if r not in roots and r not in depth_2]
+        depths = span_depths(rows)
+        by_depth = Counter(depths.values())
+        max_depth = max(depths.values())
         kinds = Counter(r["span_type"] for r in rows)
 
         # A single-span trace named after an SDK method is something that
@@ -105,17 +142,28 @@ def main(argv: list[str] | None = None) -> int:
             foreign.append(f"{trace_id} ({len(rows)} spans, source={parsed.get('source')!r})")
             continue
 
+        harness = parsed.get("harness")
+        allowed_depth = EXPECTED_MAX_DEPTH.get(harness)
+
         checked += 1
         print(f"trace {trace_id}")
         print(f"  roots      : {[r['name'] for r in roots]}")
         print(f"  span types : {dict(kinds)}")
-        print(f"  children   : {len(depth_2)} at depth 2, {len(deeper)} deeper")
+        print(f"  harness    : {harness} (max depth {allowed_depth or 'unpinned'})")
+        print(
+            "  depth      : "
+            + ", ".join(f"{n} at {d}" for d, n in sorted(by_depth.items()))
+        )
         if len(roots) != 1:
             print(f"  FAIL: expected exactly 1 root, got {len(roots)}")
             ok = False
-        if deeper:
-            names = sorted({r["name"] for r in deeper})
-            print(f"  FAIL: spans below depth 2: {names}")
+        if allowed_depth is None:
+            print(f"  WARN: harness {harness!r} has no expected depth; shape unchecked")
+        elif max_depth > allowed_depth:
+            too_deep = sorted(
+                {r["name"] for r in rows if depths[r["span_id"]] > allowed_depth}
+            )
+            print(f"  FAIL: spans below depth {allowed_depth}: {too_deep}")
             ok = False
 
         missing = [k for k in REQUIRED_KEYS if k not in parsed]

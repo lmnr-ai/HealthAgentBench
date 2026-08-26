@@ -4,6 +4,11 @@ Every `clinical_trial_matching*` task scores the agent against a `gold.txt` — 
 trials the patient is actually eligible for. This directory records where each
 task's gold came from.
 
+`tasks.jsonl` is also the **dataset itself**. `tasks/` is generated and
+gitignored, so this file is what a rebuild reads: the gold NCTs per task, the
+`gold_source` marker, and the hashes the rebuild has to reproduce. Losing it
+loses the benchmark; everything else under `tasks/` is derivable.
+
 ## The two sources
 
 | `gold_source` | Tasks | Who decided |
@@ -55,7 +60,7 @@ set arithmetic over NCT IDs.
 
 | File | Contents |
 | --- | --- |
-| `tasks.jsonl` | One row per committed task: `task_id`, `year`, `topic_id`, `gold_source`, `n_gold`, `n_pool`. |
+| `tasks.jsonl` | One row per task, and the input to `build_tasks.py --index`: `task_id`, `year`, `topic_id`, `gold_source`, `gold[]`, `n_gold`, `n_pool`, `gold_sha256`, `pool_sha256`. |
 | `audit_2021.jsonl` | One row per audited candidate: `year`, `topic_id`, `nct_id`, `model`, `clean_eligible`, `votes[{verdict, confidence}]`. |
 | `audit_2022.jsonl` | Same, for 2022. |
 
@@ -64,11 +69,21 @@ These are metadata only. The auditor's raw output also carries a free-text
 `assets/clinical_trial_matching/audit/` (gitignored) because we don't
 redistribute TREC topics or anything derived from them.
 
-Regenerate with:
+Regenerate from a built `tasks/` with:
 
 ```bash
 uv run python scripts/trec_ct/export_provenance.py --years 2021 2022
 ```
+
+and go the other way — rebuild `tasks/` from the index — with:
+
+```bash
+uv run python scripts/trec_ct/build_tasks.py --index provenance/tasks.jsonl
+```
+
+The two are inverses, and `tests/test_trec_ct_roundtrip.py` holds them to it.
+Re-export whenever gold or a pool changes, or the recorded hashes will
+(correctly) start failing.
 
 Candidate sampling is seeded on `(seed, year, topic_id)`, so re-running
 `audit_eligible.py` with the same `--seed` audits exactly the same trials and

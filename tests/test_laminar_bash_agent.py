@@ -21,10 +21,6 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.harbor_agents.laminar_bash_agent import LaminarBashAgent  # noqa: E402
 
-# One of upstream's 9 hand-audited tasks, so the gold_source assertion below is
-# about a marker we did not write ourselves.
-TASK_DIR = REPO_ROOT / "tasks" / "clinical_trial_matching_task_6"
-
 REQUIRED_KEYS = (
     "source",
     "domain",
@@ -43,8 +39,14 @@ class _ExecResult:
 class _FakeEnvironment:
     """Records commands and replays a canned stdout for the probe."""
 
-    def __init__(self, probe_stdout: str = "", return_code: int = 0, stderr: str = ""):
-        self.environment_dir = TASK_DIR / "environment"
+    def __init__(
+        self,
+        task_dir: Path,
+        probe_stdout: str = "",
+        return_code: int = 0,
+        stderr: str = "",
+    ):
+        self.environment_dir = task_dir / "environment"
         self.probe_stdout = probe_stdout
         self.return_code = return_code
         self.stderr = stderr
@@ -68,34 +70,34 @@ def agent(tmp_path, monkeypatch) -> LaminarBashAgent:
 
 
 @pytest.mark.asyncio
-async def test_answer_key_guard_passes_when_tests_dir_is_not_mounted(agent):
+async def test_answer_key_guard_passes_when_tests_dir_is_not_mounted(agent, task_dir):
     """The normal case: `ls` finds nothing, so the probe is quiet."""
-    environment = _FakeEnvironment(probe_stdout="")
+    environment = _FakeEnvironment(task_dir, probe_stdout="")
     await agent._assert_answer_key_absent(environment)
     assert environment.commands, "guard did not run any command"
 
 
 @pytest.mark.asyncio
-async def test_answer_key_guard_aborts_when_gold_is_reachable(agent):
+async def test_answer_key_guard_aborts_when_gold_is_reachable(agent, task_dir):
     """A compose file that mounts tests/ into the agent service must fail loudly.
 
     This is the branch that never executes in a healthy run, which is exactly
     why it needs a test: a typo here would disable the guard permanently and
     nothing else would notice.
     """
-    environment = _FakeEnvironment(probe_stdout="/tests/gold.txt\n/tests/qrels.txt\n")
+    environment = _FakeEnvironment(task_dir, probe_stdout="/tests/gold.txt\n/tests/qrels.txt\n")
     with pytest.raises(RuntimeError, match="answer key reachable"):
         await agent._assert_answer_key_absent(environment)
 
 
 @pytest.mark.asyncio
-async def test_write_submission_normalizes_a_stringified_array(agent):
+async def test_write_submission_normalizes_a_stringified_array(agent, task_dir):
     """A model that sends `nct_ids` as one string is a slip, not a null answer.
 
     Iterating a str walks characters, which used to turn a perfectly good
     one-shot answer into an empty submission and end the run.
     """
-    environment = _FakeEnvironment()
+    environment = _FakeEnvironment(task_dir)
     output, text = await agent._write_submission(
         environment, "NCT00304863, NCT00644046 and NCT02681068"
     )
@@ -104,14 +106,14 @@ async def test_write_submission_normalizes_a_stringified_array(agent):
 
 
 @pytest.mark.asyncio
-async def test_write_submission_does_not_end_the_run_when_the_write_fails(agent):
+async def test_write_submission_does_not_end_the_run_when_the_write_fails(agent, task_dir):
     """An empty second element is what keeps the loop going.
 
     Returning the in-memory text here would end the run as `submitted` and score
     an answer the container never received -- so the trajectory's
     `gt_event_identified` would disagree with Harbor's reward.
     """
-    environment = _FakeEnvironment(return_code=1, stderr="no space left on device")
+    environment = _FakeEnvironment(task_dir, return_code=1, stderr="no space left on device")
     output, text = await agent._write_submission(environment, ["NCT00304863"])
     assert text == ""
     assert "failed to write submission" in output
@@ -119,8 +121,8 @@ async def test_write_submission_does_not_end_the_run_when_the_write_fails(agent)
 
 
 @pytest.mark.asyncio
-async def test_write_submission_rejects_input_with_no_nct_ids(agent):
-    environment = _FakeEnvironment()
+async def test_write_submission_rejects_input_with_no_nct_ids(agent, task_dir):
+    environment = _FakeEnvironment(task_dir)
     output, text = await agent._write_submission(environment, ["none of them", ""])
     assert text == ""
     assert "no NCT identifiers" in output
@@ -128,9 +130,9 @@ async def test_write_submission_rejects_input_with_no_nct_ids(agent):
     assert environment.commands == []
 
 
-def test_task_facts_read_provenance_off_the_task_dir(agent):
-    facts = agent._task_facts(_FakeEnvironment())
-    assert facts["task_id"] == TASK_DIR.name
+def test_task_facts_read_provenance_off_the_task_dir(agent, task_dir):
+    facts = agent._task_facts(_FakeEnvironment(task_dir))
+    assert facts["task_id"] == task_dir.name
     assert facts["year"] == 2021
     assert facts["topic_id"] == 6
     assert facts["dataset"] == "TREC Clinical Trials 2021"
@@ -139,8 +141,8 @@ def test_task_facts_read_provenance_off_the_task_dir(agent):
     assert facts["n_pool"] > facts["n_gold"]
 
 
-def test_trace_metadata_has_every_required_key(agent):
-    metadata = agent._trace_metadata(agent._task_facts(_FakeEnvironment()), {"passed": 1})
+def test_trace_metadata_has_every_required_key(agent, task_dir):
+    metadata = agent._trace_metadata(agent._task_facts(_FakeEnvironment(task_dir)), {"passed": 1})
     missing = [k for k in REQUIRED_KEYS if k not in metadata]
     assert not missing, f"metadata missing {missing}"
     assert metadata["source"] == "HealthAgentBench"
@@ -148,7 +150,7 @@ def test_trace_metadata_has_every_required_key(agent):
     assert metadata["generated"] is True
 
 
-def test_harness_names_the_agent_scaffold_not_the_runner(agent):
+def test_harness_names_the_agent_scaffold_not_the_runner(agent, task_dir):
     """`harness` is what shaped the trajectory, which is this file's loop.
 
     Harbor starts the sandbox and computes the reward; it does not influence a
@@ -156,21 +158,21 @@ def test_harness_names_the_agent_scaffold_not_the_runner(agent):
     trajectories by `harness`, so putting the runner there would lump this agent
     in with every other harbor-launched agent.
     """
-    metadata = agent._trace_metadata(agent._task_facts(_FakeEnvironment()), {})
+    metadata = agent._trace_metadata(agent._task_facts(_FakeEnvironment(task_dir)), {})
     assert metadata["harness"] == "custom/laminar-bash-loop"
     assert "harbor" not in metadata["harness"]
     assert metadata["runner"] == "harbor"
     assert metadata["runner_version"]
 
 
-def test_gt_event_identified_marks_the_error_not_the_success(agent):
+def test_gt_event_identified_marks_the_error_not_the_success(agent, task_dir):
     """True means "something is wrong here", which is the opposite of `passed`.
 
     The trajectories train a model to spot errors and inefficiencies, so the
     event being identified is the mistake. Getting this backwards would invert
     the labels on every trajectory we generate, silently.
     """
-    facts = agent._task_facts(_FakeEnvironment())
+    facts = agent._task_facts(_FakeEnvironment(task_dir))
 
     correct = agent._trace_metadata(facts, {"passed": 1})
     assert correct["gt_event_identified"] is False
@@ -181,19 +183,19 @@ def test_gt_event_identified_marks_the_error_not_the_success(agent):
     assert wrong["passed"] is False
 
 
-def test_gt_event_identified_is_absent_rather_than_false_without_metrics(agent):
+def test_gt_event_identified_is_absent_rather_than_false_without_metrics(agent, task_dir):
     """No verdict must read as null, not as a failed trajectory."""
-    metadata = agent._trace_metadata(agent._task_facts(_FakeEnvironment()), {})
+    metadata = agent._trace_metadata(agent._task_facts(_FakeEnvironment(task_dir)), {})
     assert "gt_event_identified" not in metadata
 
 
-def test_score_uses_the_task_own_evaluator(agent, tmp_path):
+def test_score_uses_the_task_own_evaluator(agent, task_dir):
     """`gt_event_identified` must come from the same code the verifier runs."""
-    gold = [x for x in (TASK_DIR / "tests/gold.txt").read_text().splitlines() if x.strip()]
-    metrics = agent._score(_FakeEnvironment(), "\n".join(gold) + "\n")
+    gold = [x for x in (task_dir / "tests/gold.txt").read_text().splitlines() if x.strip()]
+    metrics = agent._score(_FakeEnvironment(task_dir), "\n".join(gold) + "\n")
     assert metrics["passed"] == 1
     assert metrics["recall_top_50"] == 1.0
     assert metrics["n_gold_eligible"] == len(gold)
 
-    metrics = agent._score(_FakeEnvironment(), "NCT00000000\n")
+    metrics = agent._score(_FakeEnvironment(task_dir), "NCT00000000\n")
     assert metrics["passed"] == 0
