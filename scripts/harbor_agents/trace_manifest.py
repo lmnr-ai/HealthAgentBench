@@ -50,10 +50,13 @@ def main(argv: list[str] | None = None) -> int:
             metadata = (result.get("agent_result") or {}).get("metadata") or {}
             name = result.get("task_name", path.parent.name)
             if not metadata:
-                # Environment setup failed. Keep it only until some later job
-                # dir supplies a real trajectory for the same task.
+                # Environment setup failed. A gap only means "no trajectory
+                # anywhere", so a task already carried by another job dir is not
+                # one -- and the job dirs are not ordered, since a run's retry
+                # passes can be listed in any order on the command line.
                 exception = result.get("exception_info") or {}
-                gaps.setdefault(name, str(exception.get("exception_type")))
+                if name not in entries:
+                    gaps.setdefault(name, str(exception.get("exception_type")))
                 continue
             gaps.pop(name, None)
             entries[name] = {
@@ -66,9 +69,16 @@ def main(argv: list[str] | None = None) -> int:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(manifest, indent=1) + "\n")
 
-    passed = sum(1 for e in manifest if e["passed"])
+    # Count the label rather than inverting `passed`: a trajectory the agent
+    # could not score carries no verdict at all (the schema says null, not
+    # false), and `len(manifest) - passed` would file those under "error".
+    errors = sum(1 for e in manifest if e["gt_event_identified"] is True)
+    clean = sum(1 for e in manifest if e["gt_event_identified"] is False)
     print(f"{len(manifest)} trajectories -> {args.out}")
-    print(f"  passed {passed}, gt_event_identified {len(manifest) - passed}")
+    print(f"  gt_event_identified: {errors} true (wrong answer), {clean} false (correct)")
+    unscored = len(manifest) - errors - clean
+    if unscored:
+        print(f"  {unscored} unscored: no verdict, gt_event_identified is null")
     if gaps:
         print(f"  {len(gaps)} task(s) never produced a trajectory:")
         for name, kind in sorted(gaps.items()):
