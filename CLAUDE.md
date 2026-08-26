@@ -73,6 +73,8 @@ HAB_LMNR_PROJECT_API_KEY=... uv run harbor run --jobs-dir jobs --job-name sliceN
   --env daytona
 HAB_LMNR_PROJECT_API_KEY=... uv run python scripts/harbor_agents/verify_traces.py \
   --minutes 10 --key-var HAB_LMNR_PROJECT_API_KEY
+uv run python scripts/harbor_agents/trace_manifest.py jobs/sliceN \
+  -o jobs/sliceN/trace_manifest.json
 ```
 
 Non-obvious things that cost time:
@@ -115,6 +117,26 @@ Non-obvious things that cost time:
 - Harbor's `DaytonaClientManager._cleanup_sync` atexit hook raises
   `CancelledError` after a successful run. It's noise; the job is already
   written to `jobs/<name>/result.json`.
+- **Budget for a retry pass on any batch run: `-n 8` loses ~12% of trials to
+  `RuntimeError: docker compose up failed`** while the DinD sandbox brings the
+  two-service compose up. It is pure infrastructure flake — the trials die in
+  environment setup, before `run()`, so they leave a `result.json` with an
+  `exception_info` and an *empty* `agent_result.metadata`, and no trace. Re-run
+  just those task names at `-n 4`, then any survivors at `-n 1`; the full 110
+  took 8 + 4 + 1 to clear (110/110, ~95 min total). Never read a batch's pass
+  rate off the trial count alone — count trials whose metadata is non-empty:
+
+  ```python
+  md = (json.load(open(p))["agent_result"] or {}).get("metadata") or {}
+  ```
+- **One Laminar project per run, and check the trace count afterwards.** A
+  project is not a run: `verify_traces.py` reports every trace in the look-back
+  window, so a second run into the same project silently interleaves with the
+  first and there is no metadata key that separates them (same `source`,
+  `harness`, `model`). Each trial records its own `lmnr_trace_id` in
+  `result.json`, so the run's own traces are exactly the ids in
+  `jobs/<name>/trace_manifest.json` — build that manifest and hand it over with
+  the run, rather than a project name plus a time window.
 
 ## Environment
 
