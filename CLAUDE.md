@@ -67,7 +67,7 @@ trace is deliberately two levels — root `DEFAULT` → flat `LLM` / `TOOL` sibl
 HAB_LMNR_PROJECT_API_KEY=... uv run harbor run --jobs-dir jobs --job-name sliceN \
   -p tasks -i clinical_trial_matching_2022_task_13 \
   --agent-import-path scripts.harbor_agents.laminar_bash_agent:LaminarBashAgent \
-  -m gpt-5.6-luna \
+  -m gpt-5.6-terra \
   --ak base_url=https://laminar-resource.services.ai.azure.com/openai/v1 \
   --ak api_key_var=AZURE_API_KEY --ak lmnr_key_var=HAB_LMNR_PROJECT_API_KEY \
   --env daytona
