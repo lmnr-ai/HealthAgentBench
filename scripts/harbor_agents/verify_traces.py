@@ -126,7 +126,8 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 "  metadata   : "
                 f"task={parsed.get('task_id')} model={parsed.get('model')} "
-                f"steps={parsed.get('num_steps')} passed={parsed.get('gt_event_identified')} "
+                f"steps={parsed.get('num_steps')} passed={parsed.get('passed')} "
+                f"gt_event={parsed.get('gt_event_identified')} "
                 f"({len(parsed)} keys)"
             )
         print()

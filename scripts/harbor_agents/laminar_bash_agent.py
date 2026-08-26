@@ -66,6 +66,11 @@ HARNESS = "harbor"
 UPSTREAM_REPO = "https://github.com/microsoft/HealthAgentBench"
 FORK_REPO = "https://github.com/lmnr-ai/HealthAgentBench"
 EVAL_CRITERION = "recall_top_50 == 1.0"
+# What `gt_event_identified` means in the metadata, spelled out because the
+# polarity is the opposite of what the name suggests to most readers: the
+# trajectories train a model to find errors, so the "event" being identified is
+# a mistake. true => the answer missed EVAL_CRITERION. See `_trace_metadata`.
+GT_EVENT = "answer is wrong (missed the eval criterion)"
 
 # Tool output that goes back into the prompt. Trial XMLs run to tens of KB and
 # a pool holds hundreds of them, so an untruncated `cat` would blow the context
@@ -339,6 +344,7 @@ class LaminarBashAgent(BaseAgent):
             "benchmark_repo": FORK_REPO,
             "upstream_repo": UPSTREAM_REPO,
             "eval_criterion": EVAL_CRITERION,
+            "gt_event": GT_EVENT,
             "num_tool_calls": self._n_tool_calls,
             "n_input_tokens": self._usage["input"],
             "n_output_tokens": self._usage["output"],
@@ -346,9 +352,13 @@ class LaminarBashAgent(BaseAgent):
             **facts,
         }
         if metrics:
-            # The eval criterion. Absent metrics => no verdict, and the schema
+            # `gt_event_identified` marks the *error*, not the success: these
+            # trajectories train a model to spot mistakes and inefficiencies, so
+            # true means "there is something wrong here" -- i.e. the answer
+            # missed the criterion. Absent metrics => no verdict, and the schema
             # says null rather than a defaulted False.
-            metadata["gt_event_identified"] = bool(metrics.get("passed"))
+            metadata["gt_event_identified"] = not metrics.get("passed")
+            metadata["passed"] = bool(metrics.get("passed"))
             for key in (
                 "recall",
                 "recall_top_20",
@@ -499,7 +509,7 @@ class LaminarBashAgent(BaseAgent):
                     {
                         "submission": self._submission or [],
                         "stop_reason": self._stop_reason,
-                        "passed": metadata.get("gt_event_identified"),
+                        "passed": metadata.get("passed"),
                     }
                 )
                 Laminar.set_trace_metadata(metadata)
@@ -516,7 +526,7 @@ class LaminarBashAgent(BaseAgent):
                     facts.get("task_id"),
                     self._n_llm_calls,
                     self._n_tool_calls,
-                    metadata.get("gt_event_identified"),
+                    metadata.get("passed"),
                     context.metadata["lmnr_trace_id"],
                 )
         Laminar.flush()

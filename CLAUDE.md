@@ -95,9 +95,14 @@ Non-obvious things that cost time:
 - Azure's OpenAI-compatible `/openai/v1` surface authenticates on an `api-key`
   header, which the OpenAI SDK never sends; the agent adds it when the base URL
   contains `azure`. `gpt-5.6-luna` also needs `max_completion_tokens`.
+- **`gt_event_identified` is the error flag, not the pass flag** — `true` means
+  the answer is *wrong*. The trajectories train a model to spot mistakes and
+  inefficiencies, so the event being identified is the mistake. `passed` is
+  carried alongside it for the unsurprising reading. Inverting this is silent
+  and poisons every label, so `tests/test_laminar_bash_agent.py` pins it.
 - The agent scores its own submission by importing the task's *own*
-  `tests/harbor_evaluator.py` host-side, so `gt_event_identified` can't drift
-  from Harbor's reward. Verified identical on every slice so far — if you change
+  `tests/harbor_evaluator.py` host-side, so the verdict can't drift from
+  Harbor's reward. Verified identical on every slice so far — if you change
   one, don't reimplement the other.
 - Daytona's DinD strategy handles the 2-service compose, but the raw-XML cache
   bind mount escapes the task dir and doesn't exist on the VM, so `bootstrap.sh`

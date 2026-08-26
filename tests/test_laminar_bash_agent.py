@@ -146,7 +146,24 @@ def test_trace_metadata_has_every_required_key(agent):
     assert metadata["source"] == "HealthAgentBench"
     assert metadata["domain"] == "healthcare"
     assert metadata["generated"] is True
-    assert metadata["gt_event_identified"] is True
+
+
+def test_gt_event_identified_marks_the_error_not_the_success(agent):
+    """True means "something is wrong here", which is the opposite of `passed`.
+
+    The trajectories train a model to spot errors and inefficiencies, so the
+    event being identified is the mistake. Getting this backwards would invert
+    the labels on every trajectory we generate, silently.
+    """
+    facts = agent._task_facts(_FakeEnvironment())
+
+    correct = agent._trace_metadata(facts, {"passed": 1})
+    assert correct["gt_event_identified"] is False
+    assert correct["passed"] is True
+
+    wrong = agent._trace_metadata(facts, {"passed": 0})
+    assert wrong["gt_event_identified"] is True
+    assert wrong["passed"] is False
 
 
 def test_gt_event_identified_is_absent_rather_than_false_without_metrics(agent):
