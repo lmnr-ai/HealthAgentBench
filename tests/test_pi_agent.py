@@ -242,6 +242,27 @@ def test_the_record_matches_the_bash_harness_apart_from_harness(agent, task_dir)
     assert facts["gold_source"] == "microsoft-hand-audit"
 
 
+@pytest.mark.parametrize(
+    ("model_name", "model", "provider"),
+    [
+        # The bash loop's form: a bare Azure deployment name.
+        ("gpt-5.6-terra", "gpt-5.6-terra", None),
+        ("azure-foundry/gpt-5.6-terra", "gpt-5.6-terra", "azure-foundry"),
+        # A model id may itself contain slashes, so the split is on the first
+        # one -- the same place pi splits it. On the last, the provider here
+        # would come out as "openrouter/openai".
+        ("openrouter/openai/gpt-5", "openai/gpt-5", "openrouter"),
+    ],
+)
+def test_the_provider_prefix_splits_where_pi_splits_it(
+    tmp_path, model_name, model, provider
+):
+    agent = _pi_agent(tmp_path, model_name=model_name)
+    metadata = agent._model_metadata()
+    assert metadata["model"] == model
+    assert metadata.get("model_provider") == provider
+
+
 def test_submission_path_comes_from_the_task_not_a_constant(agent, task_dir):
     """Pi writes the answer itself, so we must read back the path the task names."""
     environment = _FakeEnvironment(task_dir)

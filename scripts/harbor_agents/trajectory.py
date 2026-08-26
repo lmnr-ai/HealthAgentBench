@@ -259,8 +259,18 @@ class TrajectoryAgent:
         under different models and quietly break the one comparison these
         trajectories exist to support -- so the prefix is split off rather than
         dropped.
+
+        Split on the *first* slash, because that is where Pi splits it
+        (``Pi.run``'s ``split("/", 1)``, and ``_validate_pi_models``): the model
+        id itself may contain slashes, as OpenRouter's and HuggingFace's do.
+        ``openrouter/openai/gpt-5`` is provider ``openrouter`` and model
+        ``openai/gpt-5``; splitting on the last slash would invent a provider
+        called ``openrouter/openai``. A name with no slash at all is the bash
+        loop's form -- a bare deployment name and no provider.
         """
-        provider, _, model = (self.model_name or "").rpartition("/")
+        provider, slash, model = (self.model_name or "").partition("/")
+        if not slash:
+            provider, model = "", provider
         metadata = {"model": model or "unknown"}
         if provider:
             metadata["model_provider"] = provider
