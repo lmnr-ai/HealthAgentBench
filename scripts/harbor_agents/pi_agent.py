@@ -240,10 +240,22 @@ class LaminarPiAgent(TrajectoryAgent, Pi):
         the counters is survivable; losing the metadata means an unlabelled
         trajectory, so this swallows whatever the sandbox does and records what
         it has.
+
+        The one thing it must not do is *invent* an outcome. Pi writes its
+        answer inside the sandbox, so a readback that never ran leaves us with
+        no idea what it answered -- which is why ``submission_text`` stays
+        ``None`` on failure rather than falling back to ``""``. See
+        ``_score_and_record``.
         """
-        submission_text, summary = "", {}
+        submission_text: str | None = None
+        summary: dict[str, Any] = {}
+        # Two reads, two guards: a cancelled `cat` must not also cost us the
+        # counters, and vice versa.
         try:
             submission_text = await self._read_submission(environment)
+        except BaseException as exc:  # noqa: BLE001 - see docstring
+            self.logger.warning("could not read pi's submission back: %r", exc)
+        try:
             summary = await self._pi_summary(environment)
         except BaseException as exc:  # noqa: BLE001 - see docstring
             self.logger.warning("could not read back the pi run: %r", exc)
@@ -253,13 +265,14 @@ class LaminarPiAgent(TrajectoryAgent, Pi):
         self._usage.update(summary.get("usage") or {})
         if summary.get("stop_reason") and self._stop_reason == "pi_exited":
             self._stop_reason = f"pi:{summary['stop_reason']}"
-        self._submission = [
-            line.strip() for line in submission_text.splitlines() if line.strip()
-        ]
+        if submission_text is not None:
+            self._submission = [
+                line.strip() for line in submission_text.splitlines() if line.strip()
+            ]
 
         extra: dict[str, Any] = {}
         if summary.get("cost"):
             extra["cost_usd"] = summary["cost"]
         if summary.get("error"):
             extra["agent_error"] = summary["error"]
-        self._record(context, facts, self._score(environment, submission_text), extra)
+        self._score_and_record(environment, context, facts, submission_text, extra)

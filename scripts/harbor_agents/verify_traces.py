@@ -27,8 +27,7 @@ from collections import Counter
 
 from lmnr import LaminarClient
 
-# The trajectory-store schema. `gt_event_identified` is nullable by spec, so it
-# is checked for presence but allowed to be null.
+# The trajectory-store schema.
 REQUIRED_KEYS = (
     "source",
     "domain",
@@ -38,6 +37,13 @@ REQUIRED_KEYS = (
     "model",
     "num_steps",
 )
+
+#: Nullable by spec, and the agent spells null as "key absent" (which is what
+#: `metadata.get()` gives every consumer downstream). A trajectory the agent
+#: could not score -- it never got to read the submission back, or the
+#: evaluator blew up -- carries no verdict, which is a warning, not a
+#: malformed record.
+NULLABLE_KEYS = {"gt_event_identified", "passed"}
 
 #: How deep each harness's span tree is allowed to go. Depth 1 is the root.
 #: A harness that isn't listed gets its depth reported but not enforced -- a new
@@ -166,7 +172,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  FAIL: spans below depth {allowed_depth}: {too_deep}")
             ok = False
 
-        missing = [k for k in REQUIRED_KEYS if k not in parsed]
+        missing = [k for k in REQUIRED_KEYS if k not in parsed and k not in NULLABLE_KEYS]
         if missing:
             print(f"  FAIL: metadata missing {missing}")
             ok = False
@@ -177,6 +183,18 @@ def main(argv: list[str] | None = None) -> int:
                 f"steps={parsed.get('num_steps')} passed={parsed.get('passed')} "
                 f"gt_event={parsed.get('gt_event_identified')} "
                 f"({len(parsed)} keys)"
+            )
+        if parsed.get("gt_event_identified") is None:
+            # Recorded, but with no label -- unusable for training and worth
+            # seeing, since the usual cause is the submission readback failing
+            # on a timed-out trial.
+            print(
+                "  WARN: no verdict (gt_event_identified is null)"
+                + (
+                    "; submission readback failed"
+                    if parsed.get("submission_readback_failed")
+                    else ""
+                )
             )
         print()
 

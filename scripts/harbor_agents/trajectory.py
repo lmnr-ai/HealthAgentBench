@@ -13,6 +13,8 @@ consumed as one dataset. So the record lives here:
 - ``TrajectoryAgent._score``       -- the task's *own* ``harbor_evaluator.py``,
   applied host-side, so our verdict cannot drift from Harbor's reward.
 - ``TrajectoryAgent._trace_metadata`` -- the trajectory-store schema.
+- ``TrajectoryAgent._score_and_record``    -- the one way a harness closes a run
+  out, including the "we never saw the answer" case.
 - ``TrajectoryAgent._assert_answer_key_absent`` -- refuse to record a trajectory
   the model could have cheated on.
 
@@ -276,7 +278,9 @@ class TrajectoryAgent:
             # trajectories train a model to spot mistakes and inefficiencies, so
             # true means "there is something wrong here" -- i.e. the answer
             # missed the criterion. Absent metrics => no verdict, and the schema
-            # says null rather than a defaulted False.
+            # says null rather than a defaulted False. So a caller that could
+            # not establish what the agent answered must pass `{}` rather than
+            # score a stand-in empty submission -- see `_score_and_record`.
             metadata["gt_event_identified"] = not metrics.get("passed")
             metadata["passed"] = bool(metrics.get("passed"))
             for key in (
@@ -317,6 +321,46 @@ class TrajectoryAgent:
         self.logger.info("answer-key probe clean")
 
     # -- the record -------------------------------------------------------
+    def _score_and_record(
+        self,
+        environment: BaseEnvironment,
+        context: Any,
+        facts: dict[str, Any],
+        submission_text: str | None,
+        extra: dict[str, Any] | None = None,
+    ) -> None:
+        """Score what we have, stamp the record, and never raise.
+
+        Every harness calls this from its ``finally``, which on a timeout runs
+        with the task already cancelled. Raising here would replace the
+        exception that actually ended the run -- the ``CancelledError`` harbor
+        is waiting on -- with whatever went wrong while tidying up, so both
+        halves are guarded: ``_score`` execs the task's own evaluator module and
+        ``_record`` talks to Laminar, and either can fail.
+
+        ``submission_text is None`` means *we do not know what the agent
+        answered*: a readback that never completed, which is not the same thing
+        as an empty answer. Collapsing the two would score ``""``, and an empty
+        submission scores as a miss -- so a run whose answer may be sitting on
+        disk, unread, would be stamped ``gt_event_identified: true``. That key
+        is the label these trajectories exist for. No verdict is the honest
+        record; ``submission_readback_failed`` says why.
+        """
+        extra = dict(extra or {})
+        metrics: dict[str, Any] = {}
+        if submission_text is None:
+            extra["submission_readback_failed"] = True
+        else:
+            try:
+                metrics = self._score(environment, submission_text)
+            except Exception as exc:  # noqa: BLE001 - see docstring
+                self.logger.warning("could not score the submission: %r", exc)
+                extra["scoring_failed"] = repr(exc)
+        try:
+            self._record(context, facts, metrics, extra)
+        except Exception:  # see docstring
+            self.logger.exception("could not record the trajectory")
+
     def _record(
         self,
         context: Any,

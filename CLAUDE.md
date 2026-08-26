@@ -163,6 +163,14 @@ Non-obvious things that cost time:
   inefficiencies, so the event being identified is the mistake. `passed` is
   carried alongside it for the unsurprising reading. Inverting this is silent
   and poisons every label, so `tests/test_laminar_bash_agent.py` pins it.
+- **"We never read the submission" is not "the submission was empty."** Pi
+  writes its answer inside the sandbox, and `_finalize` reads it back from
+  `run()`'s `finally` — which on a timeout runs with the task already
+  cancelled, so the `cat` gets cancelled too. Scoring the `""` left over would
+  stamp `gt_event_identified: true` on a run whose answer may be sitting on
+  disk. `_score_and_record` takes `submission_text=None` for that case and
+  records no verdict plus `submission_readback_failed`; only the harnesses that
+  write the submission themselves (the bash loop) may treat `""` as an answer.
 - The agent scores its own submission by importing the task's *own*
   `tests/harbor_evaluator.py` host-side, so the verdict can't drift from
   Harbor's reward. Verified identical on every slice so far — if you change

@@ -10,11 +10,14 @@ fact that a pi record is the same record as a bash record with a different
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+from typing import ClassVar
 
 import pytest
 
@@ -38,6 +41,60 @@ class _FakeEnvironment:
 
     async def exec(self, command, cwd=None, env=None, timeout_sec=None, user=None):
         return _ExecResult()
+
+
+class _FinalizeEnvironment:
+    """Answers `_finalize`'s two reads: the submission `cat` and the summary."""
+
+    SUMMARY: ClassVar[dict] = {
+        "steps": 3,
+        "tool_calls": 5,
+        "usage": {"input": 10, "output": 2, "cached": 0},
+        "cost": 0.0,
+        "stop_reason": "stop",
+        "error": "",
+    }
+
+    def __init__(
+        self,
+        task_dir: Path,
+        submission: str = "",
+        read_error: BaseException | None = None,
+    ):
+        self.environment_dir = task_dir / "environment"
+        self.submission = submission
+        self.read_error = read_error
+
+    async def exec(self, command, cwd=None, env=None, timeout_sec=None, user=None):
+        if command.startswith("cat "):
+            if self.read_error is not None:
+                raise self.read_error
+            return _ExecResult(stdout=self.submission)
+        return _ExecResult(stdout=json.dumps(self.SUMMARY))
+
+
+class _RecordedLaminar:
+    """Stand-in for the SDK, so a record can be inspected without a project."""
+
+    def __init__(self):
+        self.metadata: dict = {}
+        self.output = None
+
+    def set_span_output(self, value):
+        self.output = value
+
+    def set_trace_metadata(self, metadata):
+        self.metadata = metadata
+
+    def get_trace_id(self):
+        return "00000000-0000-0000-0000-000000000000"
+
+
+@pytest.fixture
+def laminar(monkeypatch) -> _RecordedLaminar:
+    stub = _RecordedLaminar()
+    monkeypatch.setattr("scripts.harbor_agents.trajectory.Laminar", stub)
+    return stub
 
 
 @pytest.fixture
@@ -166,6 +223,69 @@ def test_submission_path_comes_from_the_task_not_a_constant(agent, task_dir):
         agent._submission_path(environment)
         == "/workspace/submission/eligible_trials.txt"
     )
+
+
+@pytest.mark.asyncio
+async def test_a_failed_readback_records_no_verdict(agent, task_dir, laminar):
+    """Pi's answer lives in the sandbox: unread is not the same as empty.
+
+    `_finalize` runs from `run()`'s `finally`, so on a timeout the task is
+    already cancelled and the `cat` gets cancelled with it. Scoring the "" we
+    were left holding would stamp `gt_event_identified: true` -- "this agent
+    answered wrong" -- on a run whose answer may be sitting on disk, and that
+    label is the whole point of the trajectory.
+    """
+    environment = _FinalizeEnvironment(task_dir, read_error=asyncio.CancelledError())
+    context = SimpleNamespace()
+    agent._stop_reason = "timeout"
+
+    await agent._finalize(environment, context, agent._task_facts(environment))
+
+    assert laminar.metadata["submission_readback_failed"] is True
+    assert "gt_event_identified" not in laminar.metadata
+    assert "passed" not in laminar.metadata
+    # Everything we *did* manage to read still lands.
+    assert laminar.metadata["num_steps"] == 3
+    assert laminar.metadata["num_tool_calls"] == 5
+    assert laminar.metadata["stop_reason"] == "timeout"
+    assert context.metadata["lmnr_trace_id"]
+
+
+@pytest.mark.asyncio
+async def test_an_empty_submission_we_did_read_is_still_a_verdict(agent, task_dir, laminar):
+    """The other half of the distinction: pi ran, wrote nothing, and was wrong."""
+    environment = _FinalizeEnvironment(task_dir, submission="")
+    await agent._finalize(environment, SimpleNamespace(), agent._task_facts(environment))
+
+    assert "submission_readback_failed" not in laminar.metadata
+    assert laminar.metadata["passed"] is False
+    assert laminar.metadata["gt_event_identified"] is True
+
+
+@pytest.mark.asyncio
+async def test_a_correct_submission_read_back_scores_as_correct(agent, task_dir, laminar):
+    """And a real answer is scored by the task's own evaluator, host-side."""
+    gold = (task_dir / "tests" / "gold.txt").read_text()
+    environment = _FinalizeEnvironment(task_dir, submission=gold)
+    await agent._finalize(environment, SimpleNamespace(), agent._task_facts(environment))
+
+    assert laminar.metadata["passed"] is True
+    assert laminar.metadata["gt_event_identified"] is False
+    assert laminar.metadata["recall_top_50"] == 1.0
+
+
+@pytest.mark.asyncio
+async def test_a_scoring_failure_does_not_escape_finalize(agent, task_dir, laminar, monkeypatch):
+    """`_finalize` runs in a `finally`; raising there would swallow the real error."""
+    def boom(*args, **kwargs):
+        raise RuntimeError("evaluator exploded")
+
+    monkeypatch.setattr(agent, "_score", boom)
+    environment = _FinalizeEnvironment(task_dir, submission="NCT00304863\n")
+    await agent._finalize(environment, SimpleNamespace(), agent._task_facts(environment))
+
+    assert "evaluator exploded" in laminar.metadata["scoring_failed"]
+    assert "gt_event_identified" not in laminar.metadata
 
 
 def test_the_agent_name_is_not_harbor_stock_pi(agent):

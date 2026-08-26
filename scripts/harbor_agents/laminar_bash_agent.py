@@ -318,7 +318,10 @@ class LaminarBashAgent(TrajectoryAgent, BaseAgent):
                 self.logger.exception("agent loop failed")
                 raise
             finally:
-                self._record(context, facts, self._score(environment, submission_text))
+                # Never None here: this loop writes the submission itself, so
+                # "" is a real answer (the model never submitted one), not an
+                # unknown. Pi is the harness that can lose the answer.
+                self._score_and_record(environment, context, facts, submission_text)
         Laminar.flush()
 
     async def _loop(self, messages: list[dict[str, Any]], environment: BaseEnvironment) -> str:
