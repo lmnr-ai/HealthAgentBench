@@ -221,9 +221,12 @@ Non-obvious things that cost time:
   took 8 + 4 + 1 to clear (110/110, ~95 min total). Both configs now set
   `retry.max_retries: 2` to absorb it in-run — Harbor's default
   `exclude_exceptions` keeps timeouts and reward-file failures out of the retry,
-  so a genuinely failed trajectory is still recorded as failed. Never read a
-  batch's pass rate off the trial count alone — count trials whose metadata is
-  non-empty:
+  so a genuinely failed trajectory is still recorded as failed. **That is enough
+  to make the manual pass unnecessary at `-n 6`:** the two full runs on
+  2026-08-26 (both harnesses at once, 12 concurrent sandboxes between them) each
+  cleared 110/110 with 0 errored trials, 14 and 16 in-run retries, in ~1h52m
+  apiece. Still never read a batch's pass rate off the trial count alone — count
+  trials whose metadata is non-empty:
 
   ```python
   md = (json.load(open(p))["agent_result"] or {}).get("metadata") or {}
@@ -236,6 +239,12 @@ Non-obvious things that cost time:
   `result.json`, so the run's own traces are exactly the ids in
   `jobs/<name>/trace_manifest.json` — build that manifest and hand it over with
   the run, rather than a project name plus a time window.
+- **Reference point for the criterion's difficulty.** Both harnesses on Azure
+  Foundry `gpt-5.6-terra`, 110/110 trials each: the bash loop passed 16 (14.5%,
+  mean recall@50 0.646, median 14 steps), Pi passed 27 (24.5%, 0.688, median 11
+  steps). So ~80% of trajectories carry `gt_event_identified: true`, which is
+  what the dataset is for — a batch that comes back overwhelmingly *passing* is
+  a sign the answer key leaked, not that the model improved.
 
 ## Environment
 
