@@ -249,6 +249,33 @@ class TrajectoryAgent:
         module.evaluate(submission_file, gold, pool, scratch)
         return json.loads((scratch / "metrics.json").read_text())
 
+    def _model_metadata(self) -> dict[str, str]:
+        """``model`` names the model; the route to it goes in ``model_provider``.
+
+        Pi requires ``<provider>/<model>`` and our bash loop takes the bare
+        deployment name, so the same Azure deployment arrives here as
+        ``azure-foundry/gpt-5.6-terra`` from one harness and ``gpt-5.6-terra``
+        from the other. Recording ``model_name`` verbatim would file the two
+        under different models and quietly break the one comparison these
+        trajectories exist to support -- so the prefix is split off rather than
+        dropped.
+
+        Split on the *first* slash, because that is where Pi splits it
+        (``Pi.run``'s ``split("/", 1)``, and ``_validate_pi_models``): the model
+        id itself may contain slashes, as OpenRouter's and HuggingFace's do.
+        ``openrouter/openai/gpt-5`` is provider ``openrouter`` and model
+        ``openai/gpt-5``; splitting on the last slash would invent a provider
+        called ``openrouter/openai``. A name with no slash at all is the bash
+        loop's form -- a bare deployment name and no provider.
+        """
+        provider, slash, model = (self.model_name or "").partition("/")
+        if not slash:
+            provider, model = "", provider
+        metadata = {"model": model or "unknown"}
+        if provider:
+            metadata["model_provider"] = provider
+        return metadata
+
     def _trace_metadata(self, facts: dict[str, Any], metrics: dict[str, Any]) -> dict[str, Any]:
         """The trajectory-store schema, with our own metadata flattened in."""
         metadata: dict[str, Any] = {
@@ -256,7 +283,7 @@ class TrajectoryAgent:
             "domain": DOMAIN,
             "generated": True,
             "harness": self.HARNESS,
-            "model": self.model_name or "unknown",
+            **self._model_metadata(),
             "num_steps": self._n_llm_calls,
             # -- general metadata, flattened into the top level --
             "agent": self.name(),

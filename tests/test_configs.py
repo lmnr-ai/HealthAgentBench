@@ -68,6 +68,24 @@ def test_config_holds_no_literal_secrets(path: Path):
 
 
 @pytest.mark.parametrize("path", CONFIGS, ids=lambda p: p.stem)
+def test_a_custom_pi_provider_gets_the_key_it_names(path: Path):
+    """`pi_models` names a *variable*; harbor only ships the ones in `env`.
+
+    Pi resolves `apiKey` from its own environment inside the sandbox, so a
+    provider that names a variable the config never passes down authenticates
+    with nothing -- 401 per trial, after the full nvm/node/pi install.
+    """
+    for agent in _load(path).agents:
+        providers = (agent.kwargs.get("pi_models") or {}).get("providers") or {}
+        for name, provider in providers.items():
+            api_key = provider.get("apiKey")
+            if not api_key:
+                continue
+            assert api_key.isupper(), f"{name}.apiKey should be a variable name"
+            assert api_key in agent.env, f"{name} needs ${api_key} in env"
+
+
+@pytest.mark.parametrize("path", CONFIGS, ids=lambda p: p.stem)
 def test_config_points_at_the_generated_task_dir(path: Path):
     """Relative to the repo root, because that is where harbor is invoked."""
     config = _load(path)
